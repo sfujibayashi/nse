@@ -2,7 +2,7 @@ module module_nse
   implicit none
 
   private
-  public :: nse_init,calc_nse,test_converge,nse_init_reaclib,output_composition
+  public :: nse_init,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic, two_nuclei_approx
 
   integer :: n_spec
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), g(:), zai(:)
@@ -53,13 +53,14 @@ contains
     
   end subroutine nse_init_reaclib
   
-  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,xn_history,xp_history,itr_out)
+  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,xn_history,xp_history,itr_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
     real(8),intent(in) :: rho,temp,ye
     integer,intent(in) :: itrlim
     real(8),intent(in) :: tol
     real(8),intent(out) :: xnse(n_spec)
+    logical,intent(out) :: nsefail
     real(8),intent(out),optional :: xn_history(0:itrlim),xp_history(0:itrlim)
     integer,intent(out),optional :: itr_out
     
@@ -71,7 +72,7 @@ contains
     integer :: itr
     !integer,parameter :: itrlim=50
     !    real(8),parameter :: tol = 1d-13
-
+    
     real(8) :: xsum,yesum,dxdp,dxdn,dyedp,dyedn,dx,dye,det,dxn,dxp,dl,fac
 
     real(8) :: t9
@@ -128,6 +129,8 @@ contains
     !    ! if(present(xp_history)) xp_history(0) = 0d0
     !    ! return
     ! endif
+
+    nsefail = .false.
     
     if(present(xn_history)) xn_history(0) = xn
     if(present(xp_history)) xp_history(0) = xp
@@ -141,23 +144,24 @@ contains
 
        call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
        
-       write(6,'(i5,99es15.7)') itr,xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
+       !write(6,'(i5,99es15.7)') itr,xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
        
        !if( (abs(dx)<tol .and. abs(dye) < tol) .or. (abs(dxn/xn)<tol .and. abs(dxp/xp)<tol) ) exit
        if( abs(dx) < tol .and. abs(dye) < tol ) exit
        
-       if( abs(det)/min(abs(dxdn),abs(dxdp),abs(dyedn),abs(dyedp))<1d-15 .or. logge(1) + xn < -3d2 .or. logge(2) + xp < -3d2 )then
-          ! xnse(3) = min(ye,1d0-ye)*2d0
-          ! xnse(1) = max(1d-99, 1d0-ye - 0.5d0*xnse(3))
-          ! xnse(2) = max(1d-99, ye     - 0.5d0*xnse(3))
-          ! if( abs(ye-0.5d0)<1d-16 )then
-          !    xnse(1) = 1d-99
-          !    xnse(2) = 1d-99
-          !    xnse(3) = 1d0
-          ! endif
-          stop "not converged"
-          !return
-       endif
+       ! if( abs(det)/min(abs(dxdn),abs(dxdp),abs(dyedn),abs(dyedp))<1d-15 .or. logge(1) + xn < -3d2 .or. logge(2) + xp < -3d2 )then
+       !    ! xnse(3) = min(ye,1d0-ye)*2d0
+       !    ! xnse(1) = max(1d-99, 1d0-ye - 0.5d0*xnse(3))
+       !    ! xnse(2) = max(1d-99, ye     - 0.5d0*xnse(3))
+       !    ! if( abs(ye-0.5d0)<1d-16 )then
+       !    !    xnse(1) = 1d-99
+       !    !    xnse(2) = 1d-99
+       !    !    xnse(3) = 1d0
+       !    ! endif
+       !    write(6,*) "not converged"
+       !    nsefail = .true.
+       !    return
+       ! endif
        
        dl = sqrt(dxn*dxn+dxp*dxp)
        fac = 1d0
@@ -169,8 +173,11 @@ contains
        xp = xp + dxp*fac
 
        !itr_out = itr
+       if(itr==itrlim)then
+          nsefail = .true.
+       endif
     enddo
-
+    
 
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
     logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
@@ -181,6 +188,60 @@ contains
     xnse(:) = x(:)
 
   end subroutine calc_nse
+
+  subroutine two_nuclei_approx(ye,xnse)
+    real(8),intent(in) :: ye
+    real(8),intent(out) :: xnse(n_spec)
+    
+    integer :: k1,k2
+    real(8) :: y1,y2, z1,z2,a1,a2, mexc1, mexc2, f, f_min
+
+    integer :: k1_min, k2_min
+
+    f_min = 1d99
+    do k1=1,n_spec
+       do k2=1,k1-1
+          z1 = z(k1)
+          z2 = z(k2)
+          a1 = a(k1)
+          a2 = a(k2)
+          if( (z1/a1 - ye)*(z1/a1 - z2/a2) > 0d0 )then
+             y2 = (z1/a1 - ye)/(z1/a1 - z2/a2)/a2
+             y1 = (1d0 - a2*y2)/a1
+             
+             mexc1 = mexc(k1)
+             mexc2 = mexc(k2)
+             
+             f = mexc1*y1 + mexc2*y2
+
+             !write(6,*) k1,k2,y1,y2,f
+             if(y1>0d0 .and. f < f_min)then
+                f_min = f
+                k1_min = k1
+                k2_min = k2
+                
+                !write(6,'(2i5,99es12.4)') k1_min,k2_min,f_min,mexc1,mexc2, y1,y2
+                !stop
+             endif
+          endif
+       enddo
+    enddo
+    
+    k1 = k1_min
+    k2 = k2_min
+
+    z1 = z(k1)
+    z2 = z(k2)
+    a1 = a(k1)
+    a2 = a(k2)
+    y2 = (z1/a1 - ye)/(z1/a1 - z2/a2)/a2
+    y1 = (1d0 - a2*y2)/a1
+    
+    xnse(:) = 1d-300
+    xnse(k1) = a1*y1
+    xnse(k2) = a2*y2
+    
+  end subroutine two_nuclei_approx
 
   subroutine test_converge(rho,temp,ye)
     use const,only : mu,kerg,pi,hbar,mev2erg
@@ -200,14 +261,14 @@ contains
 
     integer :: itr,itr_out
     real(8) :: tol = 1d-12
-    integer,parameter :: itrlim=200
+    integer,parameter :: itrlim=1000
     real(8) :: xn_history(0:itrlim),xp_history(0:itrlim),xnse(n_spec)
 
     real(8) :: xm,dxm,xm_min,xm_max
-
+    logical :: nsefail
     real(8) :: t9
 
-    call calc_nse(rho,temp,ye,itrlim,tol,xnse,xn_history,xp_history,itr_out)
+    call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,xn_history,xp_history,itr_out)
     !write(6,*) xnse(:)
     write(6,*) itr_out
 
@@ -255,48 +316,6 @@ contains
           !call step2(xp,xm,ye,logge,dx,dye,dxp,dxm)
           call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
           
-          !xn = 12.778382506817715d0
-          !xp = -7.2831081174406629 
-          
-          ! logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
-          
-          ! x(1:n_spec) = 10d0**logx(1:n_spec)
-          
-          ! !write(6,*) x(:)
-
-          ! xsum = sum(x(1:n_spec))
-          ! yesum= sum(zai(1:n_spec)*x(1:n_spec))
-
-          ! dxdn = sum(n(1:n_spec)*x(1:n_spec))
-          ! dxdp = sum(z(1:n_spec)*x(1:n_spec))
-          
-          ! dyedn = sum(n(1:n_spec)*zai(1:n_spec)*x(1:n_spec))
-          ! dyedp = sum(z(1:n_spec)*zai(1:n_spec)*x(1:n_spec))
-          
-          ! dxdn = dxdn/xsum
-          ! dxdp = dxdp/xsum
-          
-          ! dyedn = dyedn/yesum! - dxdn
-          ! dyedp = dyedp/yesum! - dxdp
-          
-          ! dx  = log10(xsum)
-          ! dye = log10(yesum/ye)
-
-          ! det = dxdn*dyedp - dxdp*dyedn
-          ! !write(6,*) det
-          ! !dxn =-( dx*dyedp-dye*dxdp)/det
-          ! !dxp =-(-dx*dyedn+dye*dxdn)/det
-          ! if( det == 0d0)then
-          !    dxn = 0d0
-          !    dxp = 0d0
-          ! else
-          !    dxn =-( dx*dyedp-dye*dxdp)/det
-          !    dxp =-(-dx*dyedn+dye*dxdn)/det
-          ! endif
-          
-          !write(6,'(99es13.4e3)') xsum,yesum,xn,xp,dx,dye,dxn,dxp
-          !stop
-
           write(99,'(99es13.4e3)') xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
           !write(99,'(99es13.4e3)') xp,xm,dx,dye,dxp,dxm
           
@@ -480,12 +499,53 @@ contains
     return
   end subroutine nse_alpha
   
+  subroutine statistic(x,mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
+    real(8),intent(in) :: x(n_spec)
+    real(8),intent(out) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum
+
+    integer :: k
+
+    mexc_ave = 0.d0
+    do k=1,n_spec
+       mexc_ave = mexc_ave + mexc(k)*x(k)/a(k)
+    enddo
+
+    ytot = 0.d0
+    do k=1,n_spec
+       ytot = ytot + x(k)/a(k)
+    enddo
+
+    xsum = 0.d0
+    do k=1,n_spec
+       xsum = xsum + x(k)
+    enddo
+
+    yesum = 0.d0
+    do k=1,n_spec
+       yesum = yesum + x(k)/a(k)*z(k)
+    enddo
+
+    z_heavy = 0.d0
+    a_heavy = 0.d0
+    y_heavy = 0.d0
+    do k=1,n_spec
+       if(a(k)>4d0)then
+          z_heavy = z_heavy + z(k)*x(k)/a(k)
+          a_heavy = a_heavy + a(k)*x(k)/a(k)
+          y_heavy = y_heavy +      x(k)/a(k)
+       endif
+    enddo
+    z_heavy = z_heavy / y_heavy
+    a_heavy = a_heavy / y_heavy
+
+  end subroutine statistic
+
   subroutine output_composition(x,temp,rho,ye)
     use module_ptf_reaclib
     real(8),intent(in) :: x(n_spec)
     real(8),intent(in) :: temp,rho,ye
     
-    real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum
+    real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum
     real(8),allocatable :: xa(:), xz(:), ya(:), yz(:)
     
     integer :: a_max, z_max, ia,iz,k
@@ -510,33 +570,7 @@ contains
        yz(iz) = yz(iz) + x(k)/a(k)
     enddo
 
-    mexc_ave = 0.d0
-    do k=1,n_spec
-       mexc_ave = mexc_ave + mexc(k)*x(k)/a(k)
-    enddo
-
-    ytot = 0.d0
-    do k=1,n_spec
-       ytot = ytot + x(k)/a(k)
-    enddo
-
-    xsum = 0.d0
-    do k=1,n_spec
-       xsum = xsum + x(k)
-    enddo
-
-    z_heavy = 0.d0
-    a_heavy = 0.d0
-    y_heavy = 0.d0
-    do k=1,n_spec
-       if(a(k)>4d0)then
-          z_heavy = z_heavy + z(k)*x(k)/a(k)
-          a_heavy = a_heavy + a(k)*x(k)/a(k)
-          y_heavy = y_heavy +      x(k)/a(k)
-       endif
-    enddo
-    z_heavy = z_heavy / y_heavy
-    a_heavy = a_heavy / y_heavy
+    call statistic(x,mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
 
     open(11,file="aabun",status="replace",action="write")
     write(11,'("# T,rho,Ye = ",99es12.4)') temp,rho,ye
