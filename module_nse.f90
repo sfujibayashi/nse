@@ -2,7 +2,7 @@ module module_nse
   implicit none
 
   private
-  public :: nse_init,calc_nse,test_converge,nse_alpha
+  public :: nse_init,calc_nse,test_converge,nse_init_reaclib,output_composition
 
   integer :: n_spec
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), g(:), zai(:)
@@ -12,9 +12,9 @@ contains
   subroutine nse_init(n_spec_out)
     use const,only:mnmev,mpmev,mamev,mumev
     integer, intent(out) :: n_spec_out
-    real(8),parameter :: m56ni_mev = -53.907539d0
+    real(8),parameter :: mexc_56ni_mev = -53.907539d0
 
-    n_spec = 3
+    n_spec = 4
     allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
     ! n
     a(1) = 1d0; z(1) = 0d0; n(1) = 1d0; g(1) = 2d0; mexc(1) = mnmev-a(1)*mumev
@@ -23,17 +23,39 @@ contains
     ! alpha
     a(3) = 4d0; z(3) = 2d0; n(3) = 2d0; g(3) = 1d0; mexc(3) = mamev-a(3)*mumev
     ! 56Ni
-    !a(4) =56d0; z(4) =28d0; n(4) =28d0; g(4) = 1d0; mexc(4) = m56ni_mev-a(4)*mumev
-    
+    a(4) =56d0; z(4) =28d0; n(4) =28d0; g(4) = 1d0; mexc(4) = mexc_56ni_mev
+
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
-    
     
     n_spec_out = n_spec
     
   end subroutine nse_init
+
+  subroutine nse_init_reaclib(n_spec_out)
+    use module_ptf_reaclib
+
+    integer, intent(out) :: n_spec_out
+    integer :: k
+
+    n_spec = nct_reaclib
+    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
+
+    do k=1,nct_reaclib
+       a(k) = ams_reaclib(k)
+       z(k) = dble(npt_reaclib(k))
+       n(k) = dble(nnt_reaclib(k))
+       mexc(k) = exc_reaclib(k)
+    enddo
+
+    zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
+    
+    n_spec_out = n_spec
+    
+  end subroutine nse_init_reaclib
   
   subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,xn_history,xp_history,itr_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
+    use module_ptf_reaclib
     real(8),intent(in) :: rho,temp,ye
     integer,intent(in) :: itrlim
     real(8),intent(in) :: tol
@@ -52,16 +74,21 @@ contains
 
     real(8) :: xsum,yesum,dxdp,dxdn,dyedp,dyedn,dx,dye,det,dxn,dxp,dl,fac
 
+    real(8) :: t9
+
     ! log10(rho0/rho)
     logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
     
     ! partition function may be calculated here
-    
+    t9 = temp/1d9
+    call calc_ptf(t9,g)
     !
     logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)  
     
     ! write(6,'(99es12.4)') logrho0, log10(mu*(mu*kerg*temp/(2d0*pi*hbar*hbar))**1.5d0/rho)
-    write(6,'(99es12.4)') logge(1:n_spec)
+    ! write(6,'(99es12.4)') logge(1:n_spec)
+    ! write(6,'(99es12.4)') mexc(1:n_spec)
+    ! write(6,'(99es12.4)') - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
     ! stop
     if(present(xn_history)) xn_history(:) = 0d0
     if(present(xp_history)) xp_history(:) = 0d0
@@ -71,7 +98,7 @@ contains
     do itr=1,10000
        call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
        logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
-       !write(6,'(99es12.4)') xn,xp,det,logx(:)
+       !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
        if( abs(det)>0d0 .and. maxval(logx(:))<3d2 .and. dx<0d0 .and.dye<0d0)then
           exit
        else
@@ -81,24 +108,26 @@ contains
        
     enddo
 
-    !write(6,'(99es12.4)') xn,xp,det,logx(:)
-    call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
-    !write(6,'(99es12.4)') xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
+    ! !write(6,'(99es12.4)') xn,xp,det,logx(:)
+    ! call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
+    ! !write(6,'(99es12.4)') xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
 
-    if(abs(det)/min(abs(dxdn),abs(dxdp),abs(dyedn),abs(dyedp))<1d-15)then
-       xnse(3) = min(ye,1d0-ye)*2d0
-       xnse(1) = max(1d-99, 1d0-ye - 0.5d0*xnse(3))
-       xnse(2) = max(1d-99, ye     - 0.5d0*xnse(3))
-       if( abs(ye-0.5d0)<1d-16 )then
-          xnse(1) = 1d-99
-          xnse(2) = 1d-99
-          xnse(3) = 1d0
-       endif
-       if(present(itr_out)) itr_out = 0
-       if(present(xn_history)) xn_history(0) = 0d0
-       if(present(xp_history)) xp_history(0) = 0d0
-       return
-    endif
+    ! if(abs(det)/min(abs(dxdn),abs(dxdp),abs(dyedn),abs(dyedp))<1d-15)then
+    !    stop "not converged 0"
+
+    !    ! xnse(3) = min(ye,1d0-ye)*2d0
+    !    ! xnse(1) = max(1d-99, 1d0-ye - 0.5d0*xnse(3))
+    !    ! xnse(2) = max(1d-99, ye     - 0.5d0*xnse(3))
+    !    ! if( abs(ye-0.5d0)<1d-16 )then
+    !    !    xnse(1) = 1d-99
+    !    !    xnse(2) = 1d-99
+    !    !    xnse(3) = 1d0
+    !    ! endif
+    !    ! if(present(itr_out)) itr_out = 0
+    !    ! if(present(xn_history)) xn_history(0) = 0d0
+    !    ! if(present(xp_history)) xp_history(0) = 0d0
+    !    ! return
+    ! endif
     
     if(present(xn_history)) xn_history(0) = xn
     if(present(xp_history)) xp_history(0) = xp
@@ -118,20 +147,21 @@ contains
        if( abs(dx) < tol .and. abs(dye) < tol ) exit
        
        if( abs(det)/min(abs(dxdn),abs(dxdp),abs(dyedn),abs(dyedp))<1d-15 .or. logge(1) + xn < -3d2 .or. logge(2) + xp < -3d2 )then
-          xnse(3) = min(ye,1d0-ye)*2d0
-          xnse(1) = max(1d-99, 1d0-ye - 0.5d0*xnse(3))
-          xnse(2) = max(1d-99, ye     - 0.5d0*xnse(3))
-          if( abs(ye-0.5d0)<1d-16 )then
-             xnse(1) = 1d-99
-             xnse(2) = 1d-99
-             xnse(3) = 1d0
-          endif
-          return
+          ! xnse(3) = min(ye,1d0-ye)*2d0
+          ! xnse(1) = max(1d-99, 1d0-ye - 0.5d0*xnse(3))
+          ! xnse(2) = max(1d-99, ye     - 0.5d0*xnse(3))
+          ! if( abs(ye-0.5d0)<1d-16 )then
+          !    xnse(1) = 1d-99
+          !    xnse(2) = 1d-99
+          !    xnse(3) = 1d0
+          ! endif
+          stop "not converged"
+          !return
        endif
        
        dl = sqrt(dxn*dxn+dxp*dxp)
        fac = 1d0
-       if(dl>2d0)fac = 2d0/dl
+       if(dl>0.5d0)fac = 0.5d0/dl
        !if(max(abs(dxn/xn),abs(dxp/xp)) > 0.5d0) fac = 0.5d0/max(abs(dxn/xn),abs(dxp/xp))
        !write(6,*) xn,xp
 
@@ -144,16 +174,17 @@ contains
 
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
     logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
-
+    
     x(1:n_spec) = 10d0**logx(1:n_spec)
     ! write(6,*) xn,xp
-    write(6,*) x(:)
+    !write(6,*) x(:)
     xnse(:) = x(:)
 
   end subroutine calc_nse
 
   subroutine test_converge(rho,temp,ye)
     use const,only : mu,kerg,pi,hbar,mev2erg
+    use module_ptf_reaclib
 
     real(8),intent(in) :: rho,temp,ye
 
@@ -168,14 +199,16 @@ contains
     real(8) :: xn_min,xn_max,xp_min,xp_max
 
     integer :: itr,itr_out
-    real(8) :: tol = 1d-15
+    real(8) :: tol = 1d-12
     integer,parameter :: itrlim=200
     real(8) :: xn_history(0:itrlim),xp_history(0:itrlim),xnse(n_spec)
 
     real(8) :: xm,dxm,xm_min,xm_max
 
+    real(8) :: t9
+
     call calc_nse(rho,temp,ye,itrlim,tol,xnse,xn_history,xp_history,itr_out)
-    write(6,*) xnse(:)
+    !write(6,*) xnse(:)
     write(6,*) itr_out
 
     do itr = 0,itr_out
@@ -184,14 +217,18 @@ contains
     
     logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
 
+    ! partition function may be calculated here
+    t9 = temp/1d9
+    call calc_ptf(t9,g)
+
     logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)  
 
     nn=200
     np=200
-    xn_min = -30d0
-    xn_max =  30d0
-    xp_min = -30d0
-    xp_max =  30d0
+    xn_min = -10d0
+    xn_max =  10d0
+    xp_min = -10d0
+    xp_max =  10d0
 
     if(xn_min>xn_history(itr_out)) xn_min = xn_history(itr_out)-5d0
     if(xp_min>xp_history(itr_out)) xp_min = xp_history(itr_out)-5d0
@@ -284,8 +321,6 @@ contains
 
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
 
-!write(6,*) logx(:)
-!stop
     logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
 
     x(1:n_spec) = 10d0**logx(1:n_spec)
@@ -444,7 +479,106 @@ contains
 
     return
   end subroutine nse_alpha
+  
+  subroutine output_composition(x,temp,rho,ye)
+    use module_ptf_reaclib
+    real(8),intent(in) :: x(n_spec)
+    real(8),intent(in) :: temp,rho,ye
+    
+    real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum
+    real(8),allocatable :: xa(:), xz(:), ya(:), yz(:)
+    
+    integer :: a_max, z_max, ia,iz,k
 
+    a_max = nint(maxval(a(:)))
+    z_max = nint(maxval(z(:)))
+
+    allocate(xa(a_max),ya(a_max),xz(0:z_max),yz(0:z_max))
+    
+    xa(:)=0d0
+    xz(:)=0d0
+    ya(:)=0d0
+    yz(:)=0d0
+
+    do k=1,n_spec
+       ia = nint(a(k))
+       iz = nint(z(k))
+       xa(ia) = xa(ia) + x(k)
+       xz(iz) = xz(iz) + x(k)
+       
+       ya(ia) = ya(ia) + x(k)/a(k)
+       yz(iz) = yz(iz) + x(k)/a(k)
+    enddo
+
+    mexc_ave = 0.d0
+    do k=1,n_spec
+       mexc_ave = mexc_ave + mexc(k)*x(k)/a(k)
+    enddo
+
+    ytot = 0.d0
+    do k=1,n_spec
+       ytot = ytot + x(k)/a(k)
+    enddo
+
+    xsum = 0.d0
+    do k=1,n_spec
+       xsum = xsum + x(k)
+    enddo
+
+    z_heavy = 0.d0
+    a_heavy = 0.d0
+    y_heavy = 0.d0
+    do k=1,n_spec
+       if(a(k)>4d0)then
+          z_heavy = z_heavy + z(k)*x(k)/a(k)
+          a_heavy = a_heavy + a(k)*x(k)/a(k)
+          y_heavy = y_heavy +      x(k)/a(k)
+       endif
+    enddo
+    z_heavy = z_heavy / y_heavy
+    a_heavy = a_heavy / y_heavy
+
+    open(11,file="aabun",status="replace",action="write")
+    write(11,'("# T,rho,Ye = ",99es12.4)') temp,rho,ye
+    write(11,'("#",99es12.4)') mexc_ave, z_heavy, a_heavy, ytot, xsum
+    do ia=1,a_max
+       write(11,'(i5,99es15.6e3)') ia, xa(ia), ya(ia)
+    enddo
+    close(11)
+
+    open(11,file="zabun",status="replace",action="write")
+    write(11,'("# T,rho,Ye = ",99es12.4)') temp,rho,ye
+    write(11,'("#",99es12.4)') mexc_ave, z_heavy, a_heavy, ytot, xsum
+    do iz=0,z_max
+       write(11,'(i5,99es15.6e3)') iz, xz(iz), yz(iz)
+    enddo
+    close(11)
+
+
+    open(11,file="abun",status="replace",action="write")
+    write(11,'("# T,rho,Ye = ",99es12.4)') temp,rho,ye
+    write(11,'("#",99es12.4)') mexc_ave, z_heavy, a_heavy, ytot, xsum
+    do k=1,n_spec
+       write(11,'(3i5,99es15.6e3)') nint(n(k)),nint(z(k)),nint(a(k)),x(k),x(k)/a(k)
+    enddo
+    ! do ia=1,a_max
+    !    write(11,*)
+    !    !do iz=0,min(z_max,ia-1)
+    !    do iz=0,z_max
+    !       if(jnuc_reaclib(ia,iz)==0)then
+    !          x_dummy = 0d0
+    !          y_dummy = 0d0
+    !       else
+    !          x_dummy = x(jnuc_reaclib(ia,iz))
+    !          y_dummy = x(jnuc_reaclib(ia,iz))/dble(ia)
+    !       endif
+    !       write(11,'(2i5,99es15.6e3)') iz,ia-iz, x_dummy,y_dummy
+    !    enddo
+    ! enddo
+    close(11)
+
+
+  end subroutine output_composition
   
 
 end module module_nse

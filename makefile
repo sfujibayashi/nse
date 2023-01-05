@@ -1,13 +1,13 @@
 PROG=a.out
 
-# FC = gfortran
-# FFLAGS0= -fconvert=big-endian -ffree-line-length-none #-mcmodel=large 
-# FFLAGS = -Wall -fbounds-check -O -Wuninitialized -ffpe-trap=invalid,zero,overflow,underflow,denormal -fbacktrace -g $(FFLAGS0)
+FC = gfortran
+FFLAGS0= -fconvert=big-endian -ffree-line-length-none #-mcmodel=large 
+FFLAGS = -Wall -fbounds-check -O -Wuninitialized -ffpe-trap=invalid,zero,overflow,underflow,denormal -fbacktrace -g $(FFLAGS0)
 
 #FC=/data/home/sfujibayashi/libs/hdf5-intel/bin/h5fc
-FC=ifort
-FFLAGS0= -convert big_endian -mcmodel=large -shared-intel -fpic # -qopenmp
-FFLAGS = $(FFLAGS0) -O3 -xHost  -O0 -CB -traceback -g -fpe0 
+# FC=ifort
+# FFLAGS0= -convert big_endian -mcmodel=large -shared-intel -fpic # -qopenmp
+# FFLAGS = $(FFLAGS0) -O3 -xHost  -O0 -CB -traceback -g -fpe0 
 
 .SUFFIXES: .f90 .F90 .o
 
@@ -15,7 +15,7 @@ FFLAGS = $(FFLAGS0) -O3 -xHost  -O0 -CB -traceback -g -fpe0
 #SRC1 = const_mod.f90 readmintem.f90 timeos.f90
 #SRC1 = const_mod.f90 read.f90 timeos.f90
 #SRC1 = const_mod.f90 readbeta.f90 timeos.f90
-SRC1 = const_mod.f90 module_nse.f90 main.f90
+SRC1 =  module_ptf_reaclib.f90 polint.f90 locate.f90 const_mod.f90 module_nse.f90 main.f90
 #SRC1 = EOSformat.f90
 
 
