@@ -67,7 +67,7 @@ contains
       enddo
       close(10)
       
-      jnuc_reaclib=0
+      jnuc_reaclib(:,:)=0
       do k=1,nct_reaclib
          jnuc_reaclib(naw_reaclib(k),npt_reaclib(k)) = k
       enddo
