@@ -1,0 +1,9 @@
+*.out
+*.o
+*.mod
+*.swp
+*.h
+sub_*.sh
+*.dat
+log
+*~
