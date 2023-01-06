@@ -33,7 +33,7 @@ contains
 
   subroutine nse_init_reaclib(n_spec_out)
     use module_ptf_reaclib
-
+    use const,only:memev
     integer, intent(out) :: n_spec_out
     integer :: k
 
@@ -44,7 +44,7 @@ contains
        a(k) = ams_reaclib(k)
        z(k) = dble(npt_reaclib(k))
        n(k) = dble(nnt_reaclib(k))
-       mexc(k) = exc_reaclib(k)
+       mexc(k) = exc_reaclib(k) - z(k)*memev
     enddo
 
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
