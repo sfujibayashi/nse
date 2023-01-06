@@ -68,7 +68,7 @@ contains
       enddo
       close(10)
       
-      jnuc_reaclib(:,:)=0
+      jnuc_reaclib=0
       do k=1,nct_reaclib
          jnuc_reaclib(naw_reaclib(k),npt_reaclib(k)) = k
       enddo
@@ -101,7 +101,7 @@ contains
        enddo
        return
     endif
-    
+
     if(t9_reaclib(2) <= t9 .and. t9 <= t9_reaclib(22))then
        call locate(t9_reaclib, 24,t9,nt)
     elseif(t9 < t9_reaclib(2))then
