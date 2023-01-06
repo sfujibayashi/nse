@@ -42,6 +42,7 @@ contains
       character(5) :: str1
       do k=1,nct_reaclib
          read(10,'(a5)') name_reaclib(k)
+         !write(6,*)name_reaclib(k)
       enddo
       read(10,*)
       
@@ -94,6 +95,13 @@ contains
 
     integer :: k,l
 
+    if(t9>t9_reaclib(24))then
+       do k=1,nct_reaclib
+          g(k) = (2d0*spn_reaclib(k)+1d0) * ptf_reaclib(k,24)
+       enddo
+       return
+    endif
+    
     if(t9_reaclib(2) <= t9 .and. t9 <= t9_reaclib(22))then
        call locate(t9_reaclib, 24,t9,nt)
     elseif(t9 < t9_reaclib(2))then
@@ -108,15 +116,15 @@ contains
        ! do l=1,4
        !    pf4(l)=ptf_reaclib(k,nt-2+l)
        ! enddo
-       pf4(:)=ptf_reaclib(k,nt-1:nt+2)
+       pf4(:)=log10(ptf_reaclib(k,nt-1:nt+2))
 
        call polint(t4,pf4,4,t9,pf,dpf)
 
        if( 3<=nt .and. nt<=21 .and. (pf > max(pf4(2),pf4(3)) .or. pf < min(pf4(2),pf4(3))) ) then
           pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
        endif
-       
-       g(k) = (2d0*spn_reaclib(k)+1d0) * pf
+
+       g(k) = (2d0*spn_reaclib(k)+1d0) * 10d0**pf
        ! if(pf4(1) == 1.d0 .or. (nptf(k).ne.0.and.pf4(3).eq.1.d5))then
        !    pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
        ! else
