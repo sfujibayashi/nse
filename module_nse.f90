@@ -6,6 +6,7 @@ module module_nse
 
   integer :: n_spec
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), g(:), zai(:)
+  character(5),allocatable :: name_nucl(:)
   
 contains
   
@@ -38,6 +39,7 @@ contains
     integer :: k
 
     n_spec = nct_reaclib
+    allocate(name_nucl(n_spec))
     allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
 
     do k=1,nct_reaclib
@@ -45,6 +47,7 @@ contains
        z(k) = dble(npt_reaclib(k))
        n(k) = dble(nnt_reaclib(k))
        mexc(k) = exc_reaclib(k)
+       name_nucl(k) = name_reaclib(k)
     enddo
 
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
@@ -83,7 +86,17 @@ contains
     ! partition function may be calculated here
     t9 = temp/1d9
     call calc_ptf(t9,g)
-    !
+    ! block
+    !   integer :: k
+    !   do k=1,n_spec
+    !      write(6,*) k,g(k)
+    !      if(g(k)<0d0)then
+    !         write(6,*) k,name_nucl(k)
+    !         stop
+    !      endif
+    !   enddo
+    ! end block
+    
     logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)  
     
     ! write(6,'(99es12.4)') logrho0, log10(mu*(mu*kerg*temp/(2d0*pi*hbar*hbar))**1.5d0/rho)
