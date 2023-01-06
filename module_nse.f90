@@ -52,6 +52,31 @@ contains
     n_spec_out = n_spec
     
   end subroutine nse_init_reaclib
+
+  subroutine calc_coulomb(rho,ye,fcoul)
+    use const, only : qe, mu, pi, mev2erg
+    real(8),intent(in) :: rho,ye
+    real(8),intent(out) :: fcoul(n_spec)
+
+    integer :: k
+    real(8) :: ne, v_n, v_c, u
+    real(8),parameter :: n0 = 0.16d0*1d39
+
+    fcoul(:) = 0d0
+
+    ne = ye*rho/mu
+    do k=1,n_spec
+       if( z(k)>0.d0)then
+          v_n = a(k)/n0
+          v_c = z(k)/ne
+          u   = v_n/v_c
+          
+          fcoul(k) = (3d0/5d0)*(4d0*pi/3d0)**(-1d0/3d0) * qe**2 * n0**2 * (z(k)/a(k))**2 * (v_n)**(5d0/3d0) &
+               * (-3d0/2d0*u**(1d0/3d0) + 1d0/2d0*u) / mev2erg
+       endif
+    enddo
+    
+  end subroutine calc_coulomb
   
   subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,xn_history,xp_history,itr_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
@@ -65,7 +90,7 @@ contains
     integer,intent(out),optional :: itr_out
     
     real(8) :: logrho0
-    real(8) :: logge(n_spec), logx(n_spec), x(n_spec)
+    real(8) :: logge(n_spec), logx(n_spec), x(n_spec), fcoul(n_spec)
     
     real(8) :: xp,xn
 
@@ -83,8 +108,11 @@ contains
     ! partition function may be calculated here
     t9 = temp/1d9
     call calc_ptf(t9,g)
+
+    call calc_coulomb(rho,ye,fcoul)
     !
-    logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)  
+    logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0) &
+         - fcoul(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
     
     ! write(6,'(99es12.4)') logrho0, log10(mu*(mu*kerg*temp/(2d0*pi*hbar*hbar))**1.5d0/rho)
     ! write(6,'(99es12.4)') logge(1:n_spec)
