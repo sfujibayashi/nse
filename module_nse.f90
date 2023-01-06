@@ -6,6 +6,7 @@ module module_nse
 
   integer :: n_spec
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), g(:), zai(:)
+  character(5),allocatable :: name_nucl(:)
   
 contains
   
@@ -38,6 +39,7 @@ contains
     integer :: k
 
     n_spec = nct_reaclib
+    allocate(name_nucl(n_spec))
     allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
 
     do k=1,nct_reaclib
@@ -45,6 +47,7 @@ contains
        z(k) = dble(npt_reaclib(k))
        n(k) = dble(nnt_reaclib(k))
        mexc(k) = exc_reaclib(k) - z(k)*memev
+       name_nucl(k) = name_reaclib(k)
     enddo
 
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)

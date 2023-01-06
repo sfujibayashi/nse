@@ -42,6 +42,7 @@ contains
       character(5) :: str1
       do k=1,nct_reaclib
          read(10,'(a5)') name_reaclib(k)
+         !write(6,*)name_reaclib(k)
       enddo
       read(10,*)
       
@@ -122,9 +123,7 @@ contains
        if( 3<=nt .and. nt<=21 .and. (pf > max(pf4(2),pf4(3)) .or. pf < min(pf4(2),pf4(3))) ) then
           pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
        endif
-       
-       !write(6,*) k,pf
-       
+
        g(k) = (2d0*spn_reaclib(k)+1d0) * 10d0**pf
        ! if(pf4(1) == 1.d0 .or. (nptf(k).ne.0.and.pf4(3).eq.1.d5))then
        !    pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
