@@ -465,9 +465,11 @@ contains
     !write(6,*) xnse(:)
     write(6,*) itr_out
 
+    open(98,file="convergence_history.dat",status="replace",action="write")
     do itr = 0,itr_out
        write(98,*) itr,xn_history(itr),xp_history(itr)
     enddo
+    close(98)
     
     logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
 
@@ -498,7 +500,9 @@ contains
     
     !xm_min = -20d0
     !xm_max = 20d0
+
     
+    open(99,file="convergence_map.dat",status="replace",action="write")
     write(99,'("#",99es12.4)') rho,temp,ye
     write(99,'("#",99es12.3e3)') xnse(1:3)
     
@@ -521,6 +525,7 @@ contains
           
        enddo
     enddo
+    close(99)
 
   end subroutine test_converge
 
