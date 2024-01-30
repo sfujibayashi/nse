@@ -50,6 +50,21 @@ contains
        name_nucl(k) = name_reaclib(k)
     enddo
 
+    block 
+      use const,only : mumev
+      real(8) :: mexcpb = 0d0
+      integer :: k_min
+      do k=1,nct_reaclib
+         if(mexcpb> mexc(k)/a(k))then
+            mexcpb = mexc(k)/a(k)
+            k_min = k
+         endif
+         
+      enddo
+      write(6,*) mexcpb, mexcpb/mumev, a(k_min),z(k_min)
+      stop
+    end block
+
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
     
     n_spec_out = n_spec
@@ -97,7 +112,7 @@ contains
     
     real(8) :: xp,xn
 
-    integer :: itr
+    integer :: itr, i_spec
     !integer,parameter :: itrlim=50
     !    real(8),parameter :: tol = 1d-13
     
@@ -105,6 +120,9 @@ contains
 
     real(8) :: t9
 
+    real(8),parameter :: n0 = 0.16d0*1d39
+    real(8) :: nb
+    
     ! log10(rho0/rho)
     logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
     
@@ -116,6 +134,13 @@ contains
     !
     logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0) &
          - fcoul(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
+
+    nb = rho/mu
+    do i_spec = 1,n_spec
+       if(a(i_spec) > 1)then
+          logge(i_spec) = logge(i_spec) + log10(max(1d-99,1d0-nb/n0))
+       endif
+    enddo
     
     ! write(6,'(99es12.4)') logrho0, log10(mu*(mu*kerg*temp/(2d0*pi*hbar*hbar))**1.5d0/rho)
     ! write(6,'(99es12.4)') logge(1:n_spec)
@@ -125,8 +150,8 @@ contains
     if(present(xn_history)) xn_history(:) = 0d0
     if(present(xp_history)) xp_history(:) = 0d0
 
-    xn = -2d0 - logge(1)
-    xp = -2d0 - logge(2)
+    xn = -2d0 - logge(1)! + 100d0*ye/(temp/1.16d9)*0d0
+    xp = -2d0 - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
     do itr=1,10000
        call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
        logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
@@ -140,7 +165,8 @@ contains
        
     enddo
 
-    ! !write(6,'(99es12.4)') xn,xp,det,logx(:)
+    !write(6,'(99es12.4)') xn,xp
+    !stop
     ! call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
     ! !write(6,'(99es12.4)') xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
 
@@ -369,7 +395,7 @@ contains
 
     real(8) :: ave_a,a11,a12,a21,a22
 
-    logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
+    logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
 
     logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
 
