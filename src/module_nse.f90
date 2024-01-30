@@ -60,6 +60,7 @@ contains
       use const,only : mumev
       real(8) :: mexcpb = 0d0
       integer :: k_min
+      k_min = 0
       do k=1,nct_reaclib
          if(mexcpb> mexc(k)/a(k))then
             mexcpb = mexc(k)/a(k)
@@ -118,16 +119,16 @@ contains
     
     real(8) :: xp,xn
 
-    integer :: itr, i_spec
+    integer :: itr
     !integer,parameter :: itrlim=50
     !    real(8),parameter :: tol = 1d-13
     
-    real(8) :: xsum,yesum,dxdp,dxdn,dyedp,dyedn,dx,dye,det,dxn,dxp,dl,fac
+    real(8) :: dxdp,dxdn,dyedp,dyedn,dx,dye,det,dxn,dxp,dl,fac
 
     real(8) :: t9
 
     real(8),parameter :: n0 = 0.16d0*1d39
-    real(8) :: nb
+    ! real(8) :: nb
     
     ! log10(rho0/rho)
     logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
@@ -264,6 +265,8 @@ contains
 
     integer :: k1_min, k2_min
 
+    k1_min = 0
+    k2_min = 0
     f_min = 1d99
     do k1=1,n_spec
        do k2=1,k1-1
@@ -316,11 +319,11 @@ contains
     real(8),intent(in) :: rho,temp,ye
 
     real(8) :: logrho0
-    real(8) :: logge(n_spec), logx(n_spec), x(n_spec)
+    real(8) :: logge(n_spec)
     
     real(8) :: xp,xn
 
-    real(8) :: xsum,yesum,dxdp,dxdn,dyedp,dyedn,dx,dye,det,dxn,dxp
+    real(8) :: dxdp,dxdn,dyedp,dyedn,dx,dye,det,dxn,dxp
 
     integer :: in,ip,nn,np
     real(8) :: xn_min,xn_max,xp_min,xp_max
@@ -330,7 +333,7 @@ contains
     integer,parameter :: itrlim=1000
     real(8) :: xn_history(0:itrlim),xp_history(0:itrlim),xnse(n_spec)
 
-    real(8) :: xm,dxm,xm_min,xm_max
+    ! real(8) :: xm,dxm,xm_min,xm_max
     logical :: nsefail
     real(8) :: t9
 
@@ -402,7 +405,7 @@ contains
     real(8) :: xsum,yesum
     real(8) :: det,dxdn,dxdp,dyedn,dyedp
 
-    real(8) :: ave_a,a11,a12,a21,a22
+    ! real(8) :: ave_a,a11,a12,a21,a22
 
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
 
