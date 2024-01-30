@@ -4,8 +4,8 @@ EXE_DIR := bin/
 PROG:=$(EXE_DIR)a.out
 
 FC := gfortran
-FFLAGS0:= -fconvert=big-endian -ffree-line-length-none #-mcmodel=large 
-FFLAGS := -Wall -fbounds-check -O -Wuninitialized -ffpe-trap=invalid,zero,overflow,underflow,denormal -fbacktrace -g $(FFLAGS0)
+FFLAGS := -fconvert=big-endian -ffree-line-length-none #-mcmodel=large 
+FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=invalid,zero,overflow,underflow
 
 #FC:=/data/home/sfujibayashi/libs/hdf5-intel/bin/h5fc
 # FC:=ifort
