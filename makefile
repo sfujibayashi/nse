@@ -14,7 +14,8 @@ FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=i
 
 .SUFFIXES: .f90 .F90 .o
 
-SRC :=  module_ptf_reaclib.f90 polint.f90 locate.f90 const_mod.f90 module_nse.f90 main.f90
+MOD :=  module_ptf_reaclib.f90 const_mod.f90 module_nse.f90
+SRC :=  locate.f90 polint.f90 main.f90
 
 SRC_DIR := src/
 
@@ -22,13 +23,12 @@ OBJ_DIR := obj/
 
 FFLAGS += -J$(OBJ_DIR)
 
+SRC := $(MOD) $(SRC)
+
 SRC := $(addprefix $(SRC_DIR), $(SRC))
 
 OBJ_FILES := $(addprefix $(OBJ_DIR),$(notdir $(SRC:.f90=.o)))
-# MOD_FILES := $(addprefix $(OBJ_DIR),$(notdir $(MOD:.f90=.mod)))
-
-
-
+MOD_FILES := $(addprefix $(OBJ_DIR),$(notdir $(MOD:.f90=.mod)))
 
 .PHONY: all test
 
