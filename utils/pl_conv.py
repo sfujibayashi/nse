@@ -35,7 +35,7 @@ plt.rcParams.update(params)
 
 clight=2.99792458e10
 
-with open("fort.99",mode="r") as f:
+with open("convergence_map.dat",mode="r") as f:
     array = f.readline().split()
     print(array)
     rho = float(array[1])
@@ -47,11 +47,11 @@ with open("fort.99",mode="r") as f:
     x_y = float(array[3])
     
 
-data=np.loadtxt("fort.98",comments="#")
+data=np.loadtxt("convergence_history.dat",comments="#")
 xn_history=data[:,1]
 xp_history=data[:,2]
 
-data=np.loadtxt("fort.99",comments="#")
+data=np.loadtxt("convergence_map.dat",comments="#")
 
 xn=np.unique(data[:,0])
 xp=np.unique(data[:,1])
