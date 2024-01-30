@@ -16,64 +16,76 @@ module module_ptf_reaclib
   real(8) :: t9_reaclib(24) = (/0.10d0,0.15d0,0.20d0,0.30d0,0.40d0,0.50d0,0.60d0,0.70d0,0.80d0,0.90d0,1.00d0,1.50d0,2.00d0,2.50d0,3.00d0,3.50d0,4.00d0,4.50d0,5.00d0,6.00d0,7.00d0,8.00d0,9.00d0,10.0d0/)
 
 contains
-  subroutine init_ptf_reaclib(fn, nct_in, nz_in, na_in)
+  subroutine init_ptf_reaclib(fn)!, nct_in, nz_in, na_in)
     character(*),intent(in) :: fn
-    integer,intent(in) :: nct_in, nz_in, na_in
+    ! integer,intent(in) :: nct_in, nz_in, na_in
 
+    character(5) :: str1,str2
+    integer :: k,i
 
-    nct_reaclib = nct_in
-    nz_reaclib = nz_in
-    na_reaclib = na_in
+    character(256) :: str
     
     open(10,file=fn,status="old",action="read")
     read(10,*)
     read(10,*)
+    i=0
+    str1=""
+    loop_count:do
+       str2=str1
+       read(10,'(a5)') str1
+       ! write(6,*) str1
+       if(str1==str2) exit loop_count
+       i = i + 1
+    enddo loop_count
+    nct_reaclib = i
+
+    write(6,*) "# of species:", nct_reaclib
+    
+    ! nct_reaclib = nct_in
     
     allocate ( name_reaclib(nct_reaclib),ref_reaclib(2,nct_reaclib))
     allocate ( bhf_reaclib(nct_reaclib),bex_reaclib(nct_reaclib))
     allocate ( npt_reaclib(nct_reaclib),nnt_reaclib(nct_reaclib),naw_reaclib(nct_reaclib))
     allocate ( ams_reaclib(nct_reaclib),spn_reaclib(nct_reaclib),exc_reaclib(nct_reaclib),ptf_reaclib(nct_reaclib,24))
+    
+    do k=1,nct_reaclib
+       ! read(10,'(a5,f12.3,i4,i4,f6.1,f10.3,1x,a5)') name_reaclib(k),ams_reaclib(k),npt_reaclib(k),nnt_reaclib(k),spn_reaclib(k),exc_reaclib(k),ref_reaclib(1,k)
+       read(10,'(a5,f12.3,i4,i4,f6.1,f10.3)') name_reaclib(k),ams_reaclib(k),npt_reaclib(k),nnt_reaclib(k),spn_reaclib(k),exc_reaclib(k)!,ref_reaclib(1,k)
+       !write(6,*) k,name_reaclib(k),ams_reaclib(k),npt_reaclib(k),nnt_reaclib(k),spn_reaclib(k),exc_reaclib(k)!,ref_reaclib(1,k)
+       !ref_reaclib(2,k) = ref_reaclib(1,k)
+       read(10,*) (ptf_reaclib(k,i),i=1 ,8 )
+       read(10,*) (ptf_reaclib(k,i),i=9 ,16)
+       read(10,*) (ptf_reaclib(k,i),i=17,24)
+       
+       ! if(npt_reaclib(k)==26 .and. nnt_reaclib(k) ==30)then
+       !    write(6,*) str1
+       !    write(6,*) ref_reaclib(1,k)
+       !    write(6,*) exc_reaclib(k)
+       
+       !    do i=1,24
+       !       write(6,*) t9_reaclib(i),ptf_reaclib(k,i)
+       !    enddo
+       !    stop
+       ! endif
+         
+       naw_reaclib(k) = nint(ams_reaclib(k))
+    enddo
+    close(10)
+    
+    ! nz_reaclib = nz_in
+    ! na_reaclib = na_in
+    nz_reaclib = maxval(npt_reaclib(:))
+    na_reaclib = maxval(naw_reaclib(:))
+    write(6,*) "Z, A max :", nz_reaclib, na_reaclib
+    
     allocate ( jnuc_reaclib(1:na_reaclib,0:nz_reaclib))
     allocate ( iadz_reaclib(0:nz_reaclib),naz_reaclib(0:nz_reaclib))
 
+    jnuc_reaclib(:,:)=0
+    do k=1,nct_reaclib
+       jnuc_reaclib(naw_reaclib(k),npt_reaclib(k)) = k
+    enddo
 
-    block
-      integer :: k,i
-      character(5) :: str1
-      do k=1,nct_reaclib
-         read(10,'(a5)') name_reaclib(k)
-         !write(6,*)name_reaclib(k)
-      enddo
-      read(10,*)
-      
-      do k=1,nct_reaclib
-         read(10,'(a5,f12.3,i4,i4,f6.1,f10.3,1x,a5)') str1,ams_reaclib(k),npt_reaclib(k),nnt_reaclib(k),spn_reaclib(k),exc_reaclib(k),ref_reaclib(1,k)
-         ref_reaclib(2,k) = ref_reaclib(1,k)
-         read(10,*) (ptf_reaclib(k,i),i=1 ,8 )
-         read(10,*) (ptf_reaclib(k,i),i=9 ,16)
-         read(10,*) (ptf_reaclib(k,i),i=17,24)
-
-! if(npt_reaclib(k)==26 .and. nnt_reaclib(k) ==30)then
-!    write(6,*) str1
-!    write(6,*) ref_reaclib(1,k)
-!    write(6,*) exc_reaclib(k)
-
-!    do i=1,24
-!       write(6,*) t9_reaclib(i),ptf_reaclib(k,i)
-!    enddo
-!    stop
-! endif
-         
-         naw_reaclib(k) = nint(ams_reaclib(k))
-      enddo
-      close(10)
-      
-      jnuc_reaclib=0
-      do k=1,nct_reaclib
-         jnuc_reaclib(naw_reaclib(k),npt_reaclib(k)) = k
-      enddo
-    end block
-    
   ! do k=1,nct_reaclib
   !    if(ams_reaclib(k)<60d0)then
   !       write(99,*)
@@ -101,7 +113,7 @@ contains
        enddo
        return
     endif
-
+    
     if(t9_reaclib(2) <= t9 .and. t9 <= t9_reaclib(22))then
        call locate(t9_reaclib, 24,t9,nt)
     elseif(t9 < t9_reaclib(2))then

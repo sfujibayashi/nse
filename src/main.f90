@@ -18,18 +18,17 @@ program main
 
   block
     character(256) :: fn
-    integer :: nct_in, nz_in, na_in
 
-    fn = "/Users/sfujibayashi/tmp/wanajo/winvn_v2.0.dat"; nct_in = 7854; nz_in  = 112; na_in  = 337
+    fn = "/Users/sfujibayashi/tmp/wanajo/winvn_v2.0.dat"
     !fn = "reduced"; nct_in = 2322; nz_in  = 55; na_in  = 90+55
     
     !call init_ptf_reaclib("/Users/fujibayashishou/Desktop/Wanajo/winvn_v2.0.dat",nct_in,nz_in,na_in)
-    call init_ptf_reaclib(fn,nct_in,nz_in,na_in)
+    call init_ptf_reaclib(fn)!,nct_in,nz_in,na_in)
 
     !call nse_init(nct_in)
     call nse_init_reaclib(n_spec)
-    write(6,*) n_spec
-    !stop
+    ! write(6,*) "",n_spec
+    ! stop
   end block
 
   ! call nse_init(n_spec)
@@ -38,11 +37,12 @@ program main
 
 
   rho=1d8
-  temp=3d9
-  ye=0.50d0
+  temp=1d7
+  ye=0.30d0
   call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail)
+  write(6,*) nsefail
   call output_composition(xnse,temp,rho,ye)
-  
+  stop
   ! rho=1.6605E+03
   ! temp=1.1605E+09*2d0
   ! ye=0.30d0
