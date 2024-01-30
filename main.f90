@@ -13,12 +13,13 @@ program main
 
   real(8) :: xn_history(itrlim), xp_history(itrlim)
   integer :: itr_out
+  logical :: nsefail
 
   block
     character(256) :: fn
     integer :: nct_in, nz_in, na_in
 
-    fn = "/Users/fujibayashishou/Desktop/Wanajo/winvn_v2.0.dat"; nct_in = 7854; nz_in  = 112; na_in  = 337
+    fn = "/Users/sfujibayashi/tmp/wanajo/winvn_v2.0.dat"; nct_in = 7854; nz_in  = 112; na_in  = 337
     !fn = "reduced"; nct_in = 2322; nz_in  = 55; na_in  = 90+55
     
     !call init_ptf_reaclib("/Users/fujibayashishou/Desktop/Wanajo/winvn_v2.0.dat",nct_in,nz_in,na_in)
@@ -30,12 +31,14 @@ program main
     !stop
   end block
 
+  ! call nse_init(n_spec)
+
   allocate(xnse(n_spec))
 
   rho=1d8
-  temp=1d9
+  temp=3d9
   ye=0.50d0
-  call calc_nse(rho,temp,ye,itrlim,tol,xnse)
+  call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail)
   call output_composition(xnse,temp,rho,ye)
   
   !call test_converge(rho,temp,ye)
