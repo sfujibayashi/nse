@@ -1,10 +1,10 @@
 *.out
-*.o
-*.mod
+# *.o
+# *.mod
 *.swp
-*.h
-sub_*.sh
-*.dat
+# *.h
+# *.dat
 log
 *~
 *.png
+obj
