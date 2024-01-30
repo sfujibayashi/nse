@@ -8,12 +8,16 @@ module module_nse
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), g(:), zai(:)
   character(5),allocatable :: name_nucl(:)
   
+  logical :: use_reaclib
+  
 contains
   
   subroutine nse_init(n_spec_out)
     use const,only:mnmev,mpmev,mamev,mumev
     integer, intent(out) :: n_spec_out
     real(8),parameter :: mexc_56ni_mev = -53.907539d0
+
+    use_reaclib = .false.
 
     n_spec = 4
     allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
@@ -37,6 +41,8 @@ contains
     use const,only:memev
     integer, intent(out) :: n_spec_out
     integer :: k
+
+    use_reaclib = .true.
 
     n_spec = nct_reaclib
     allocate(name_nucl(n_spec))
@@ -105,14 +111,20 @@ contains
 
     real(8) :: t9
 
+    ! write(6,*) use_reaclib
+
     ! log10(rho0/rho)
     logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
     
     ! partition function may be calculated here
     t9 = temp/1d9
-    call calc_ptf(t9,g)
+    if(use_reaclib)call calc_ptf(t9,g)
 
-    call calc_coulomb(rho,ye,fcoul)
+    if(use_reaclib)then
+       call calc_coulomb(rho,ye,fcoul)
+    else
+       fcoul(:) = 0d0
+    endif
     !
     logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0) &
          - fcoul(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
@@ -209,7 +221,6 @@ contains
        endif
     enddo
     
-
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
     logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
     
