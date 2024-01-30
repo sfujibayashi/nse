@@ -291,7 +291,7 @@ contains
        call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
        
        if(present(err_out))err_out = max(abs(dx), abs(dye))
-       !write(6,'(i5,99es15.7)') itr,xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
+
        
        !if( (abs(dx)<tol .and. abs(dye) < tol) .or. (abs(dxn/xn)<tol .and. abs(dxp/xp)<tol) ) exit
        if( abs(dx) < tol .and. abs(dye) < tol ) exit
@@ -311,6 +311,8 @@ contains
        ! endif
        
        dl = sqrt(dxn*dxn+dxp*dxp)
+
+       ! write(6,'(i5,99es15.7)') itr,xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp,dl
        fac = 1d0
        if(dl>0.5d0)fac = 0.5d0/dl
        !if(max(abs(dxn/xn),abs(dxp/xp)) > 0.5d0) fac = 0.5d0/max(abs(dxn/xn),abs(dxp/xp))
@@ -497,7 +499,14 @@ contains
     if(xp_min>xp_history(itr_out)) xp_min = xp_history(itr_out)-5d0
     if(xn_max<xn_history(itr_out)) xn_max = xn_history(itr_out)+5d0
     if(xp_max<xp_history(itr_out)) xp_max = xp_history(itr_out)+5d0
-    
+
+    dxn = maxval(xn_history(1:itr_out)) - minval(xn_history(1:itr_out))
+    dxp = maxval(xp_history(1:itr_out)) - minval(xp_history(1:itr_out))
+
+    xn_min = minval(xn_history(1:itr_out))-dxn*0.1d0
+    xn_max = maxval(xn_history(1:itr_out))+dxn*0.1d0
+    xp_min = minval(xp_history(1:itr_out))-dxp*0.1d0
+    xp_max = maxval(xp_history(1:itr_out))+dxp*0.1d0
     !xm_min = -20d0
     !xm_max = 20d0
 
