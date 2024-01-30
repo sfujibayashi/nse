@@ -14,7 +14,8 @@ program main
 
   real(8) :: xn_history(itrlim), xp_history(itrlim)
   integer :: itr_out
-  logical :: nsefail
+  logical :: nsefail, use_tnaguess
+  real(8) :: err_out
 
   block
     character(256) :: fn
@@ -35,28 +36,35 @@ program main
 
   allocate(xnse(n_spec))
 
-
+  use_tnaguess = .false.
   rho=1d8
-  temp=1d7
+  temp=6.5d9
   ye=0.30d0
-  call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail)
-  write(6,*) nsefail
+  call    calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out)
+  write(6,*) nsefail,itr_out,err_out
+  if(nsefail) then
+     use_tnaguess = .true.
+     call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out)
+     write(6,*) nsefail,itr_out,err_out
+  endif
   call output_composition(xnse,temp,rho,ye)
-  stop
+  ! call test_converge(rho,temp,ye,use_tnaguess)
+
+
   ! rho=1.6605E+03
   ! temp=1.1605E+09*2d0
   ! ye=0.30d0
   
   ! call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail)
-  ! block
-  !   real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum
-  !   call statistic(xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
-  !   write(6,'("rho, temp, ye = "99es12.4)') rho,temp,ye
-  !   write(6,'("Sanity check. sum of X_i (should be 1) and Z_i /A_i Y_i (should be Ye)  = "99es12.4)') xsum, yesum
-  !   write(6,'("mass excess per baryon (MeV) = "99es12.4)') mexc_ave
-  !   write(6,'(" Y = 1/<A> for all nuclei    = "99es12.4)') ytot
-  !   write(6,'("<A>, <Z>, Y for heavy        = "99es12.4)') z_heavy, a_heavy, y_heavy
-  ! end block
+  block
+    real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum
+    call statistic(xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
+    write(6,'("rho, temp, ye = "99es12.4)') rho,temp,ye
+    write(6,'("Sanity check. sum of X_i (should be 1) and Z_i Y_i (should be Ye)  = "99es12.4)') xsum, yesum
+    write(6,'("mass excess per baryon (MeV) = "99es12.4)') mexc_ave
+    write(6,'(" Y = 1/<A> for all nuclei    = "99es12.4)') ytot
+    write(6,'("<A>, <Z>, Y for heavy        = "99es12.4)') z_heavy, a_heavy, y_heavy
+  end block
 
   ! call two_nuclei_approx(ye,xnse)
   ! block
@@ -68,10 +76,12 @@ program main
   ! call test_converge(rho,temp,ye)
   ! stop
 
+  stop
+
   block
-    integer :: nrho=10, ntemp=10, nye=1
+    integer :: nrho=10, ntemp=10, nye=9
     integer :: irho, itemp, iye
-    real(8) :: rho_max=1.66d14, rho_min=1.66d10, temp_max=10d0*1.16d10, temp_min=0.1d0*1.16d10, ye_max=0.6d0, ye_min=0.10d0
+    real(8) :: rho_max=1.66d14, rho_min=1.66d1, temp_max=10d0*1.16d10, temp_min=0.1d0*1.16d10, ye_max=0.9d0, ye_min=0.10d0
     real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum
     
     integer :: k_n, k_p, k_4he
@@ -89,7 +99,7 @@ program main
              rho = 10d0**(log10(rho_min) + (log10(rho_max)-log10(rho_min))*dble(irho-1)/dble(nrho-1))
              temp = 10d0**(log10(temp_min) + (log10(temp_max)-log10(temp_min))*dble(itemp-1)/dble(ntemp-1))
              write(6,*) irho,itemp,rho,temp
-             call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail)
+             call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess)
              call statistic(xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
              write(99,'(99es12.4)') rho,temp,ye, mexc_ave/mumev, z_heavy, a_heavy, y_heavy, ytot, xnse(k_n),xnse(k_p), xnse(k_4he)
              if(nsefail)then

@@ -56,21 +56,21 @@ contains
        name_nucl(k) = name_reaclib(k)
     enddo
 
-    block 
-      use const,only : mumev
-      real(8) :: mexcpb = 0d0
-      integer :: k_min
-      k_min = 0
-      do k=1,nct_reaclib
-         if(mexcpb> mexc(k)/a(k))then
-            mexcpb = mexc(k)/a(k)
-            k_min = k
-         endif
+    ! block 
+    !   use const,only : mumev
+    !   real(8) :: mexcpb = 0d0
+    !   integer :: k_min
+    !   k_min = 0
+    !   do k=1,nct_reaclib
+    !      if(mexcpb> mexc(k)/a(k))then
+    !         mexcpb = mexc(k)/a(k)
+    !         k_min = k
+    !      endif
          
-      enddo
-      write(6,*) mexcpb, mexcpb/mumev, a(k_min),z(k_min)
-      stop
-    end block
+    !   enddo
+    !   write(6,*) mexcpb, mexcpb/mumev, a(k_min),z(k_min)
+    !   stop
+    ! end block
 
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
     
@@ -103,7 +103,7 @@ contains
     
   end subroutine calc_coulomb
   
-  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,xn_history,xp_history,itr_out)
+  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,xn_history,xp_history,itr_out,err_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
     real(8),intent(in) :: rho,temp,ye
@@ -111,8 +111,10 @@ contains
     real(8),intent(in) :: tol
     real(8),intent(out) :: xnse(n_spec)
     logical,intent(out) :: nsefail
+    logical,intent(in) :: use_tnaguess
     real(8),intent(out),optional :: xn_history(0:itrlim),xp_history(0:itrlim)
     integer,intent(out),optional :: itr_out
+    real(8),intent(out),optional :: err_out
     
     real(8) :: logrho0
     real(8) :: logge(n_spec), logx(n_spec), x(n_spec), fcoul(n_spec)
@@ -158,23 +160,99 @@ contains
     ! write(6,'(99es12.4)') mexc(1:n_spec)
     ! write(6,'(99es12.4)') - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
     ! stop
+    
     if(present(xn_history)) xn_history(:) = 0d0
     if(present(xp_history)) xp_history(:) = 0d0
 
-    xn = -2d0 - logge(1)! + 100d0*ye/(temp/1.16d9)*0d0
-    xp = -2d0 - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
-    do itr=1,10000
-       call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
-       logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
-       !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
-       if( abs(det)>0d0 .and. maxval(logx(:))<3d2 .and. dx<0d0 .and.dye<0d0)then
-          exit
-       else
-          xn = xn - 1d0
-          xp = xp - 1d0
-       endif
+
+    ! use two-nuclei approx for initial guess
+    if(use_tnaguess)then
+       block
+         integer :: k1,k2
+         real(8) :: eta01ex, eta02ex
+         real(8) :: z1,z2,a1,a2,x1,x2,g1,g2,mex1,mex2,n1,n2
+
+         if(ye/=0.5d0)then
+            call two_nuclei_approx_index(ye, k1, k2)
+
+            z1 = z(k1)
+            z2 = z(k2)
+            a1 = a(k1)
+            a2 = a(k2)
+            n1 = a1-z1
+            n2 = a2-z2
+            x2 = (z1/a1 - ye)/(z1/a1 - z2/a2)
+            x1 = (1d0 - x2)
+
+            g1 = g(k1)
+            g2 = g(k2)
+            mex1 = mexc(k1)*mev2erg
+            mex2 = mexc(k2)*mev2erg
+
+            ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT / ln(10)
+            eta01ex = (logrho0 + log10(x1) - log10(g1) - 2.5d0*log10(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp))/log(10d0)
+            ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT / ln(10)
+            eta02ex = (logrho0 + log10(x2) - log10(g2) - 2.5d0*log10(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp))/log(10d0)
+
+            xn = (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1)
+            xp = (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
+
+         else
+
+            k1 = jnuc_reaclib(1,1)
+            k2 = jnuc_reaclib(56,26)
+
+            z1 = z(k1)
+            z2 = z(k2)
+            a1 = a(k1)
+            a2 = a(k2)
+            n1 = a1-z1
+            n2 = a2-z2
+            !x2 = (z1/a1 - ye)/(z1/a1 - z2/a2)
+            !x1 = (1d0 - x2)
+
+            x1 = 1d-100
+            x2 = 1d0-x1
+
+            g1 = g(k1)
+            g2 = g(k2)
+            mex1 = mexc(k1)*mev2erg
+            mex2 = mexc(k2)*mev2erg
+
+            ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT / ln(10)
+            eta01ex = (logrho0 + log10(x1) - log10(g1) - 2.5d0*log10(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp))/log(10d0)
+            ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT / ln(10)
+            eta02ex = (logrho0 + log10(x2) - log10(g2) - 2.5d0*log10(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp))/log(10d0)
+
+            xn = (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1)
+            xp = (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
+            
+
+         end if
+
+         ! write(6,*) z1,a1,z2,a2,x1,x2, xn, xp
+         ! write(6,*) (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1), (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
+
+       end block
+
+    else
        
-    enddo
+       xn = -2d0 - logge(1)! + 100d0*ye/(temp/1.16d9)*0d0
+       xp = -2d0 - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
+       do itr=1,10000
+          call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
+          logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
+          !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
+          if( abs(det)>0d0 .and. maxval(logx(:))<3d2 .and. dx<0d0 .and.dye<0d0)then
+             exit
+          else
+             xn = xn - 1d0
+             xp = xp - 1d0
+          endif
+
+       enddo
+
+    endif
 
     !write(6,'(99es12.4)') xn,xp
     !stop
@@ -212,6 +290,7 @@ contains
 
        call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
        
+       if(present(err_out))err_out = max(abs(dx), abs(dye))
        !write(6,'(i5,99es15.7)') itr,xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
        
        !if( (abs(dx)<tol .and. abs(dye) < tol) .or. (abs(dxn/xn)<tol .and. abs(dxp/xp)<tol) ) exit
@@ -236,7 +315,7 @@ contains
        if(dl>0.5d0)fac = 0.5d0/dl
        !if(max(abs(dxn/xn),abs(dxp/xp)) > 0.5d0) fac = 0.5d0/max(abs(dxn/xn),abs(dxp/xp))
        !write(6,*) xn,xp
-
+       
        xn = xn + dxn*fac
        xp = xp + dxp*fac
 
@@ -250,8 +329,7 @@ contains
     logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
     
     x(1:n_spec) = 10d0**logx(1:n_spec)
-    ! write(6,*) xn,xp
-    !write(6,*) x(:)
+    !write(6,*) itr,xn,xp
     xnse(:) = x(:)
 
   end subroutine calc_nse
@@ -260,10 +338,70 @@ contains
     real(8),intent(in) :: ye
     real(8),intent(out) :: xnse(n_spec)
     
+    real(8) :: y1,y2, z1,z2,a1,a2
     integer :: k1,k2
+
+    call two_nuclei_approx_index(ye, k1, k2)
+    
+    ! real(8) :: y1,y2, z1,z2,a1,a2, mexc1, mexc2, f, f_min
+
+
+    ! integer :: k1_min, k2_min
+
+    ! k1_min = 0
+    ! k2_min = 0
+    ! f_min = 1d99
+    ! do k1=1,n_spec
+    !    do k2=1,k1-1
+    !       z1 = z(k1)
+    !       z2 = z(k2)
+    !       a1 = a(k1)
+    !       a2 = a(k2)
+    !       if( (z1/a1 - ye)*(z1/a1 - z2/a2) > 0d0 )then
+    !          y2 = (z1/a1 - ye)/(z1/a1 - z2/a2)/a2
+    !          y1 = (1d0 - a2*y2)/a1
+             
+    !          mexc1 = mexc(k1)
+    !          mexc2 = mexc(k2)
+             
+    !          f = mexc1*y1 + mexc2*y2
+
+    !          !write(6,*) k1,k2,y1,y2,f
+    !          if(y1>0d0 .and. f < f_min)then
+    !             f_min = f
+    !             k1_min = k1
+    !             k2_min = k2
+                
+    !             !write(6,'(2i5,99es12.4)') k1_min,k2_min,f_min,mexc1,mexc2, y1,y2
+    !             !stop
+    !          endif
+    !       endif
+    !    enddo
+    ! enddo
+    
+    ! k1 = k1_min
+    ! k2 = k2_min
+
+    z1 = z(k1)
+    z2 = z(k2)
+    a1 = a(k1)
+    a2 = a(k2)
+    y2 = (z1/a1 - ye)/(z1/a1 - z2/a2)/a2
+    y1 = (1d0 - a2*y2)/a1
+    
+    xnse(:) = 1d-300
+    xnse(k1) = a1*y1
+    xnse(k2) = a2*y2
+    
+  end subroutine two_nuclei_approx
+
+
+  subroutine two_nuclei_approx_index(ye,k1_min,k2_min)
+    real(8),intent(in) :: ye
+    integer,intent(out) :: k1_min,k2_min
     real(8) :: y1,y2, z1,z2,a1,a2, mexc1, mexc2, f, f_min
 
-    integer :: k1_min, k2_min
+    integer :: k1, k2
 
     k1_min = 0
     k2_min = 0
@@ -296,30 +434,16 @@ contains
        enddo
     enddo
     
-    k1 = k1_min
-    k2 = k2_min
+  end subroutine two_nuclei_approx_index
 
-    z1 = z(k1)
-    z2 = z(k2)
-    a1 = a(k1)
-    a2 = a(k2)
-    y2 = (z1/a1 - ye)/(z1/a1 - z2/a2)/a2
-    y1 = (1d0 - a2*y2)/a1
-    
-    xnse(:) = 1d-300
-    xnse(k1) = a1*y1
-    xnse(k2) = a2*y2
-    
-  end subroutine two_nuclei_approx
-
-  subroutine test_converge(rho,temp,ye)
+  subroutine test_converge(rho,temp,ye,use_tnaguess)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
 
     real(8),intent(in) :: rho,temp,ye
-
+    logical,intent(in) :: use_tnaguess
     real(8) :: logrho0
-    real(8) :: logge(n_spec)
+    real(8) :: logge(n_spec), fcoul(n_spec)
     
     real(8) :: xp,xn
 
@@ -337,7 +461,7 @@ contains
     logical :: nsefail
     real(8) :: t9
 
-    call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,xn_history,xp_history,itr_out)
+    call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,xn_history,xp_history,itr_out)
     !write(6,*) xnse(:)
     write(6,*) itr_out
 
@@ -349,12 +473,19 @@ contains
 
     ! partition function may be calculated here
     t9 = temp/1d9
-    call calc_ptf(t9,g)
+    if(use_reaclib)call calc_ptf(t9,g)
 
-    logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)  
+    if(use_reaclib)then
+       call calc_coulomb(rho,ye,fcoul)
+    else
+       fcoul(:) = 0d0
+    endif
+    !
+    logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0) &
+         - fcoul(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
 
-    nn=200
-    np=200
+    nn=100
+    np=100
     xn_min = -10d0
     xn_max =  10d0
     xp_min = -10d0
@@ -369,7 +500,7 @@ contains
     !xm_max = 20d0
     
     write(99,'("#",99es12.4)') rho,temp,ye
-    write(99,'("#",99es12.4)') xnse(1:3)
+    write(99,'("#",99es12.3e3)') xnse(1:3)
     
     do ip=1,np
        write(99,*)
