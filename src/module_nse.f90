@@ -132,7 +132,8 @@ contains
     real(8) :: t9
 
     real(8),parameter :: n0 = 0.16d0*1d39
-    ! real(8) :: nb
+    integer :: i_spec
+    real(8) :: nb
     
     ! log10(rho0/rho)
     logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
@@ -149,7 +150,7 @@ contains
     !
     logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0) &
          - fcoul(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
-
+    
     ! nb = rho/mu
     ! do i_spec = 1,n_spec
     !    if(a(i_spec) > 1)then
@@ -176,61 +177,32 @@ contains
 
          if(ye/=0.5d0)then
             call two_nuclei_approx_index(ye, k1, k2)
-
-            z1 = z(k1)
-            z2 = z(k2)
-            a1 = a(k1)
-            a2 = a(k2)
-            n1 = a1-z1
-            n2 = a2-z2
-            x2 = (z1/a1 - ye)/(z1/a1 - z2/a2)
-            x1 = (1d0 - x2)
-
-            g1 = g(k1)
-            g2 = g(k2)
-            mex1 = mexc(k1)*mev2erg
-            mex2 = mexc(k2)*mev2erg
-
-            ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT / ln(10)
-            eta01ex = (logrho0 + log10(x1) - log10(g1) - 2.5d0*log10(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp))/log(10d0)
-            ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT / ln(10)
-            eta02ex = (logrho0 + log10(x2) - log10(g2) - 2.5d0*log10(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp))/log(10d0)
-
-            xn = (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1)
-            xp = (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
-
          else
-
             k1 = jnuc_reaclib(1,1)
             k2 = jnuc_reaclib(56,26)
+         endif
 
-            z1 = z(k1)
-            z2 = z(k2)
-            a1 = a(k1)
-            a2 = a(k2)
-            n1 = a1-z1
-            n2 = a2-z2
-            !x2 = (z1/a1 - ye)/(z1/a1 - z2/a2)
-            !x1 = (1d0 - x2)
-
-            x1 = 1d-100
-            x2 = 1d0-x1
-
-            g1 = g(k1)
-            g2 = g(k2)
-            mex1 = mexc(k1)*mev2erg
-            mex2 = mexc(k2)*mev2erg
-
-            ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT / ln(10)
-            eta01ex = (logrho0 + log10(x1) - log10(g1) - 2.5d0*log10(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp))/log(10d0)
-            ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT / ln(10)
-            eta02ex = (logrho0 + log10(x2) - log10(g2) - 2.5d0*log10(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp))/log(10d0)
-
-            xn = (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1)
-            xp = (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
-            
-
-         end if
+         z1 = z(k1)
+         z2 = z(k2)
+         a1 = a(k1)
+         a2 = a(k2)
+         n1 = a1-z1
+         n2 = a2-z2
+         x2 = (z1/a1 - ye)/(z1/a1 - z2/a2)
+         x1 = (1d0 - x2)
+         
+         g1 = g(k1)
+         g2 = g(k2)
+         mex1 = mexc(k1)*mev2erg
+         mex2 = mexc(k2)*mev2erg
+         
+         ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT / ln(10)
+         eta01ex = (logrho0 + log10(x1) - log10(g1) - 2.5d0*log10(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp))/log(10d0)
+         ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT / ln(10)
+         eta02ex = (logrho0 + log10(x2) - log10(g2) - 2.5d0*log10(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp))/log(10d0)
+         
+         xn = (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1)
+         xp = (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
 
          ! write(6,*) z1,a1,z2,a2,x1,x2, xn, xp
          ! write(6,*) (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1), (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
@@ -763,13 +735,6 @@ contains
     a_heavy = a_heavy / y_heavy
 
   end subroutine statistic
-
-  subroutine ranking(n,k_rank)
-    integer,intent(in) :: n, k_rank(n)
-
-    
-    
-  end subroutine ranking
 
   subroutine output_composition(x,temp,rho,ye)
     use module_ptf_reaclib
