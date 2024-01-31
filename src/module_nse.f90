@@ -103,7 +103,7 @@ contains
     
   end subroutine calc_coulomb
   
-  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,xn_history,xp_history,itr_out,err_out)
+  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
     real(8),intent(in) :: rho,temp,ye
@@ -115,6 +115,8 @@ contains
     real(8),intent(out),optional :: xn_history(0:itrlim),xp_history(0:itrlim)
     integer,intent(out),optional :: itr_out
     real(8),intent(out),optional :: err_out
+    real(8),intent(in),optional :: xn_guess,xp_guess
+    real(8),intent(out),optional :: xn_out,xp_out
     
     real(8) :: logrho0
     real(8) :: logge(n_spec), logx(n_spec), x(n_spec), fcoul(n_spec)
@@ -236,21 +238,26 @@ contains
        end block
 
     else
-       
-       xn = -2d0 - logge(1)! + 100d0*ye/(temp/1.16d9)*0d0
-       xp = -2d0 - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
-       do itr=1,10000
-          call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
-          logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
-          !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
-          if( abs(det)>0d0 .and. maxval(logx(:))<3d2 .and. dx<0d0 .and.dye<0d0)then
-             exit
-          else
-             xn = xn - 1d0
-             xp = xp - 1d0
-          endif
 
-       enddo
+       if(present(xn_guess).and.present(xp_guess))then
+          xp = xp_guess
+          xn = xn_guess
+       else
+          xn = -2d0 - logge(1)! + 100d0*ye/(temp/1.16d9)*0d0
+          xp = -2d0 - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
+          do itr=1,10000
+             call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
+             logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
+             !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
+             if( abs(det)>0d0 .and. maxval(logx(:))<3d2 .and. dx<0d0 .and.dye<0d0)then
+                exit
+             else
+                xn = xn - 1d0
+                xp = xp - 1d0
+             endif
+             
+          enddo
+       endif
 
     endif
 
@@ -326,13 +333,16 @@ contains
           nsefail = .true.
        endif
     enddo
-    
+
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
     logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
     
     x(1:n_spec) = 10d0**logx(1:n_spec)
     !write(6,*) itr,xn,xp
     xnse(:) = x(:)
+
+    if(present(xn_out)) xn_out = xn
+    if(present(xn_out)) xp_out = xp
 
   end subroutine calc_nse
 
@@ -753,6 +763,13 @@ contains
     a_heavy = a_heavy / y_heavy
 
   end subroutine statistic
+
+  subroutine ranking(n,k_rank)
+    integer,intent(in) :: n, k_rank(n)
+
+    
+    
+  end subroutine ranking
 
   subroutine output_composition(x,temp,rho,ye)
     use module_ptf_reaclib

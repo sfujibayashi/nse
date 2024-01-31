@@ -25,12 +25,14 @@ program make_nse_table
   integer :: irho, itemp, iye
   integer :: itr_out
   real(8) :: err_out
-  real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum
+  real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum, x_heavy
 
   integer :: k_n, k_p, k_4he
 
   character(256) :: fn_out, fn_ptf
 
+  real(8) :: xn_guess, xp_guess
+  
   call getarg(1, fn_para)
   
   open(10,file=fn_para,status="old",action="read")
@@ -51,7 +53,7 @@ program make_nse_table
   k_4he = jnuc_reaclib(4,2)
 
   open(11,file=fn_out,status="replace",action="write")
-  write(11,'("#",99a16)') "rho(g/cm^3)", "temp(K)", "Ye", "mexc_av(MeV)", "<Z>h", "<A>h", "Yh", "Ytot", "Xn", "Xp", "X(4He)"
+  write(11,'("#",99a16)') "rho(g/cm^3)", "temp(K)", "Ye", "mexc_av(MeV)", "<Z>h", "<A>h", "Xh", "Ytot", "Xn", "Xp", "X(4He)"
   do iye=1,nye
 
      if(nye>1)then
@@ -76,9 +78,13 @@ program make_nse_table
               rho = rho_min
            endif
            
-
+           
            use_tnaguess = .false.
-           call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out)
+           if(irho==1)then
+              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out, xn_out = xn_guess, xp_out = xp_guess)
+           else
+              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out, xn_guess = xn_guess, xp_guess = xp_guess, xn_out = xn_guess, xp_out = xp_guess)
+           endif
            ! write(6,*) nsefail,itr_out,err_out
            if(nsefail) then
               use_tnaguess = .true.
@@ -93,7 +99,8 @@ program make_nse_table
            endif
 
            call statistic(xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
-           write(11,'(" ",99es16.7e3)') rho,temp,ye, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xnse(k_n),xnse(k_p), xnse(k_4he)
+           x_heavy = a_heavy*y_heavy
+           write(11,'(" ",99es16.7e3)') rho,temp,ye, mexc_ave, z_heavy, a_heavy, x_heavy, ytot, xnse(k_n),xnse(k_p), xnse(k_4he)
 
            if(nsefail)then
               write(6,'("failed",3i5,99es12.4)') irho,itemp,iye,rho,temp,ye, err_out
