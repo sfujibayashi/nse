@@ -14,9 +14,8 @@ program make_nse_table
 !!! NSE
   integer :: n_spec
   real(8),allocatable :: xnse(:)
-  integer :: k
 
-  real(8) :: xn_history(itrlim), xp_history(itrlim)
+  ! real(8) :: xn_history(itrlim), xp_history(itrlim)
   logical :: nsefail, use_tnaguess
   
   integer :: nrho, ntemp, nye
@@ -31,8 +30,12 @@ program make_nse_table
 
   character(256) :: fn_out, fn_ptf
 
-  real(8) :: xn_guess, xp_guess
-  
+  real(8) :: xn_guess, xp_guess, xn_out, xp_out
+
+  integer :: i
+  integer,parameter :: n_rank = 10
+  integer :: index_r(n_rank)
+
   call getarg(1, fn_para)
   
   open(10,file=fn_para,status="old",action="read")
@@ -54,6 +57,8 @@ program make_nse_table
 
   open(11,file=fn_out,status="replace",action="write")
   write(11,'("#",99a16)') "rho(g/cm^3)", "temp(K)", "Ye", "mexc_av(MeV)", "<Z>h", "<A>h", "Xh", "Ytot", "Xn", "Xp", "X(4He)"
+  open(12,file=trim(fn_out)//"_ranking",status="replace",action="write")
+  open(13,file=trim(fn_out)//"_log",status="replace",action="write")
   do iye=1,nye
 
      if(nye>1)then
@@ -81,10 +86,13 @@ program make_nse_table
            
            use_tnaguess = .false.
            if(irho==1)then
-              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out, xn_out = xn_guess, xp_out = xp_guess)
+              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out, xn_out = xn_out, xp_out = xp_out)
            else
-              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out, xn_guess = xn_guess, xp_guess = xp_guess, xn_out = xn_guess, xp_out = xp_guess)
+              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out, xn_guess = xn_guess, xp_guess = xp_guess, xn_out = xn_out, xp_out = xp_out)
            endif
+           xn_guess = xn_out
+           xp_guess = xp_out
+
            ! write(6,*) nsefail,itr_out,err_out
            if(nsefail) then
               use_tnaguess = .true.
@@ -92,6 +100,7 @@ program make_nse_table
               ! write(6,*) nsefail,itr_out,err_out
            endif
            write(6,*) irho,itemp,iye,rho,temp,ye,itr_out,use_tnaguess
+           
 
            if(nsefail) then
               ! call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out)
@@ -100,7 +109,10 @@ program make_nse_table
 
            call statistic(xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
            x_heavy = a_heavy*y_heavy
-           write(11,'(" ",99es16.7e3)') rho,temp,ye, mexc_ave, z_heavy, a_heavy, x_heavy, ytot, xnse(k_n),xnse(k_p), xnse(k_4he)
+           call index_rank(n_rank, n_spec, xnse, index_r, 1d0)
+           
+           write(11,'(" ",11es16.7e3)') rho,temp,ye, mexc_ave, z_heavy, a_heavy, x_heavy, ytot, xnse(k_n), xnse(k_p), xnse(k_4he)
+           write(12,'(" ",3es16.7e3,10a16,10es16.7e3)')rho,temp,ye, (name_reaclib(index_r(i)),i=1,n_rank), (xnse(index_r(i)),i=1,n_rank)
 
            if(nsefail)then
               write(6,'("failed",3i5,99es12.4)') irho,itemp,iye,rho,temp,ye, err_out
@@ -108,11 +120,14 @@ program make_nse_table
               !call output_composition(xnse,temp,rho,ye)
               !stop
            endif
+           write(13,*) irho,itemp,iye,rho,temp,ye,itr_out,use_tnaguess
 
 
         enddo
      enddo
   enddo
   close(11)
+  close(12)
+  close(13)
 
 end program make_nse_table
