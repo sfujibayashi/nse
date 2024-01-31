@@ -107,9 +107,14 @@ contains
 
     integer :: k,l
 
+    do k=1,nct_reaclib
+       g(k) = (2d0*spn_reaclib(k)+1d0)
+    enddo
+    ! return
+
     if(t9>t9_reaclib(24))then
        do k=1,nct_reaclib
-          g(k) = (2d0*spn_reaclib(k)+1d0) * ptf_reaclib(k,24)
+          g(k) = g(k) * ptf_reaclib(k,24)
        enddo
        return
     endif
@@ -136,7 +141,7 @@ contains
           pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
        endif
 
-       g(k) = (2d0*spn_reaclib(k)+1d0) * 10d0**pf
+       g(k) = g(k) * 10d0**pf
        ! if(pf4(1) == 1.d0 .or. (nptf(k).ne.0.and.pf4(3).eq.1.d5))then
        !    pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
        ! else
