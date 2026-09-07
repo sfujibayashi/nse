@@ -23,8 +23,6 @@ contains
     character(5) :: str1,str2
     integer :: k,i
 
-    character(256) :: str
-    
     open(10,file=fn,status="old",action="read")
     read(10,*)
     read(10,*)
@@ -104,11 +102,8 @@ contains
     real(8),intent(out) :: pf
 
     real(8) :: t4(4),pf4(4),dpf
-    real(8) :: g0, logpf
     integer :: nt
 
-    g0 = (2d0*spn_reaclib(k)+1d0)
-    
     if(t9_reaclib(2) <= t9 .and. t9 <= t9_reaclib(22))then
        call locate(t9_reaclib, 24,t9,nt)
     elseif(t9 < t9_reaclib(2))then
@@ -124,10 +119,10 @@ contains
     call polint(t4,pf4,4,t9,pf,dpf)
     
     if( 3<=nt .and. nt<=21 .and. (pf > max(pf4(2),pf4(3)) .or. pf < min(pf4(2),pf4(3))) ) then
-       logpf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
+       pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
     endif
 
-    pf = g0 * 10d0**logpf
+    pf = 10d0**pf
     
   end subroutine get_ptf_reaclib
 
@@ -138,7 +133,7 @@ contains
     real(8) :: t4(4),pf4(4),pf,dpf
     integer :: nt
 
-    integer :: k,l
+    integer :: k
 
     do k=1,nct_reaclib
        g(k) = (2d0*spn_reaclib(k)+1d0)

@@ -40,121 +40,219 @@ contains
   end subroutine nse_init_four
 
   subroutine nse_init_reaclib(n_spec_out)
+
     use module_ptf_reaclib
     use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
-    use const,only:memev
-    integer, intent(out) :: n_spec_out
-    integer :: k,j,i
+    use const, only: memev
 
-    integer,allocatable :: jrauscher(:) 
+    integer,intent(out) :: n_spec_out
+
+    integer :: i, j, k
+    integer,allocatable :: jrauscher(:)
 
     allocate(jrauscher(nct_reaclib))
+    jrauscher(:) = 0
 
-    ireaclib(:) = 0
+    ! ---------------------------------------------------------
+    ! WinVNE index -> Rauscher index
+    ! ---------------------------------------------------------
 
-    do k = 1, nct_reaclib
-       ireaclib(k) = k
-    enddo
+    do k=1,nct_reaclib
 
-    jrauscher(:) = 0    
-    do k = 1, nct_reaclib
-       
-       if (naw_reaclib(k) == 1) cycle
-       
-       do j = 1, nct_rauscher
+       do j=1,nct_rauscher
+
           if (npt_reaclib(k) == z_rauscher(j) .and. &
                naw_reaclib(k) == a_rauscher(j)) then
+
              jrauscher(k) = j
              exit
+
           endif
+
        enddo
-       
-    enddo
-    
-    n_spec = 0
-    do k = 1, nct_reaclib
-       
-       if (naw_reaclib(k) == 1) then
-          ! n, p
-          n_spec = n_spec + 1
-       else if (jrauscher(k) > 0) then
-          n_spec = n_spec + 1
-       endif
-       
+
     enddo
 
-    write(6,'(a,i6)') "Rauscher matched species = ", count(jrauscher > 0)
-    write(6,'(a,i6)') "NSE species kept        = ", n_spec
+    ! ---------------------------------------------------------
+    ! Keep:
+    !   1. nuclei present in Rauscher
+    !   2. light nuclei missing from Rauscher -> WinVNE fallback
+    !
+    ! Exclude:
+    !   Rauscher-missing nuclei with Z >= 87
+    ! ---------------------------------------------------------
 
+    n_spec = count((jrauscher > 0) .or. (npt_reaclib < 87))
 
-    block
-      integer :: nmiss
-      nmiss = 0
-      do k = 1, nct_reaclib
-         
-         if (jrauscher(k) == 0) then
-            nmiss = nmiss + 1
-            
-            write(*,'(a5,3i6)') &
-                 name_reaclib(k), &
-                 naw_reaclib(k), &
-                 npt_reaclib(k), &
-                 nnt_reaclib(k)
-         endif
-         
-      enddo
+    write(6,'(a,i6)') "Rauscher matched species = ", &
+         count(jrauscher > 0)
 
-      write(*,*) "Missing from Rauscher =", nmiss
-    end block
+    write(6,'(a,i6)') "WinVNE PF fallback       = ", &
+         count((jrauscher == 0) .and. (npt_reaclib < 87))
+
+    write(6,'(a,i6)') "Excluded species         = ", &
+         count((jrauscher == 0) .and. (npt_reaclib >= 87))
+
+    write(6,'(a,i6)') "NSE species kept         = ", n_spec
 
 
     allocate(ireaclib(n_spec))
     allocate(irauscher(n_spec))
-    
+
+    allocate(name_nucl(n_spec))
+    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), &
+         g(n_spec), zai(n_spec))
+
+    ! ---------------------------------------------------------
+    ! Construct NSE species arrays
+    ! ---------------------------------------------------------
+
     i = 0
+
     do k=1,nct_reaclib
-       
-       ! Rauscher matched
-       if (jrauscher(k) > 0) then
-          
+
+       if (jrauscher(k) > 0 .or. npt_reaclib(k) < 87) then
+
           i = i + 1
+
           ireaclib(i)  = k
           irauscher(i) = jrauscher(k)
-          
-          ! Rauscher missing, but keep non-superheavy species
-       else if (npt_reaclib(k) < 87) then
-          
-          i = i + 1
-          ireaclib(i)  = k
-          irauscher(i) = 0
-          
+
+          a(i) = ams_reaclib(k)
+          z(i) = dble(npt_reaclib(k))
+          n(i) = dble(nnt_reaclib(k))
+
+          mexc(i) = exc_reaclib(k) - z(i)*memev
+          name_nucl(i) = name_reaclib(k)
+
        endif
-       
+
     enddo
 
-    allocate(name_nucl(n_spec))
-    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec), zai(n_spec))
-    
+    if (i /= n_spec) then
+       write(*,*) "ERROR constructing NSE species:", i, n_spec
+       stop
+    endif
+
+    zai(:) = z(:)/a(:)
+
     use_reaclib = .true.
 
-    n_spec = nct_reaclib
-    allocate(name_nucl(n_spec))
-    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
-
-    do i=1,nct_reaclib
-       k = ireaclib(i)
-       a(k) = ams_reaclib(k)
-       z(k) = dble(npt_reaclib(k))
-       n(k) = dble(nnt_reaclib(k))
-       mexc(k) = exc_reaclib(k) - z(k)*memev
-       name_nucl(k) = name_reaclib(k)
-    enddo
-    
-    zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
-    
     n_spec_out = n_spec
-    
+
+    deallocate(jrauscher)
+
   end subroutine nse_init_reaclib
+
+  ! subroutine nse_init_reaclib(n_spec_out)
+  !   use module_ptf_reaclib
+  !   use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
+  !   use const,only:memev
+  !   integer, intent(out) :: n_spec_out
+  !   integer :: k,j,i
+
+  !   integer,allocatable :: jrauscher(:) 
+
+  !   allocate(jrauscher(nct_reaclib))
+
+  !   jrauscher(:) = 0    
+  !   do k = 1, nct_reaclib
+       
+  !      if (naw_reaclib(k) == 1) cycle
+       
+  !      do j = 1, nct_rauscher
+  !         if (npt_reaclib(k) == z_rauscher(j) .and. &
+  !              naw_reaclib(k) == a_rauscher(j)) then
+  !            jrauscher(k) = j
+  !            exit
+  !         endif
+  !      enddo
+       
+  !   enddo
+    
+  !   n_spec = 0
+  !   do k = 1, nct_reaclib
+       
+  !      if (naw_reaclib(k) == 1) then
+  !         ! n, p
+  !         n_spec = n_spec + 1
+  !      else if (jrauscher(k) > 0) then
+  !         n_spec = n_spec + 1
+  !      endif
+       
+  !   enddo
+
+  !   write(6,'(a,i6)') "Rauscher matched species = ", count(jrauscher > 0)
+  !   write(6,'(a,i6)') "NSE species kept        = ", n_spec
+
+
+  !   block
+  !     integer :: nmiss
+  !     nmiss = 0
+  !     do k = 1, nct_reaclib
+         
+  !        if (jrauscher(k) == 0) then
+  !           nmiss = nmiss + 1
+            
+  !           write(*,'(a5,3i6)') &
+  !                name_reaclib(k), &
+  !                naw_reaclib(k), &
+  !                npt_reaclib(k), &
+  !                nnt_reaclib(k)
+  !        endif
+         
+  !     enddo
+
+  !     write(*,*) "Missing from Rauscher =", nmiss
+  !   end block
+
+
+  !   allocate(ireaclib(n_spec))
+  !   allocate(irauscher(n_spec))
+    
+  !   ireaclib(:) = 0
+  !   i = 0
+  !   do k=1,nct_reaclib
+  !      ! Rauscher matched
+  !      if (jrauscher(k) > 0) then
+  !         i = i + 1
+  !         ireaclib(i)  = k
+  !         irauscher(i) = jrauscher(k)
+          
+  !         ! Rauscher missing, but keep non-superheavy species
+  !      else if (npt_reaclib(k) < 87) then
+          
+  !         i = i + 1
+  !         ireaclib(i)  = k
+  !         irauscher(i) = 0
+          
+  !      endif
+       
+  !   enddo
+
+  !   allocate(name_nucl(n_spec))
+  !   allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec), zai(n_spec))
+    
+  !   use_reaclib = .true.
+
+  !   n_spec = nct_reaclib
+  !   allocate(name_nucl(n_spec))
+  !   allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
+
+  !   do i=1,nct_reaclib
+  !      k = ireaclib(i)
+  !      a(k) = ams_reaclib(k)
+  !      z(k) = dble(npt_reaclib(k))
+  !      n(k) = dble(nnt_reaclib(k))
+  !      mexc(k) = exc_reaclib(k) - z(k)*memev
+  !      name_nucl(k) = name_reaclib(k)
+  !   enddo
+    
+  !   zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
+    
+  !   n_spec_out = n_spec
+    
+  ! end subroutine nse_init_reaclib
 
   subroutine calc_coulomb(rho,ye,fcoul)
     use const, only : qe, mu, pi, mev2erg

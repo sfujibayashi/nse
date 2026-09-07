@@ -127,4 +127,35 @@ contains
 
   end subroutine init_ptf_rauscher
 
+  subroutine get_ptf_rauscher(t9, k, pf)
+    real(8),intent(in) :: t9
+    integer,intent(in) :: k
+    real(8),intent(out) :: pf
+
+    real(8) :: t4(4),pf4(4),dpf
+    integer :: nt
+
+    if(t9_rauscher(2) <= t9 .and. t9 <= t9_rauscher(nt_rauscher-2))then
+       call locate(t9_rauscher, nt_rauscher,t9,nt)
+    elseif(t9 < t9_rauscher(2))then
+       nt = 2
+    elseif(t9 > t9_rauscher(nt_rauscher-2))then
+       nt = nt_rauscher-2
+    endif
+
+    t4(:) = t9_rauscher(nt-1:nt+2)
+
+    pf4(:)=log10(ptf_rauscher(k,nt-1:nt+2))
+    
+    call polint(t4,pf4,4,t9,pf,dpf)
+    
+    if( 3<=nt .and. nt<=nt_rauscher-3 .and. (pf > max(pf4(2),pf4(3)) .or. pf < min(pf4(2),pf4(3))) ) then
+       pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
+    endif
+
+    pf = 10d0**pf
+    
+  end subroutine get_ptf_rauscher
+
+
 end module module_ptf_rauscher
