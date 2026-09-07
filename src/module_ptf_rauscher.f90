@@ -145,7 +145,7 @@ contains
 
     t4(:) = t9_rauscher(nt-1:nt+2)
 
-    pf4(:)=log10(ptf_rauscher(k,nt-1:nt+2))
+    pf4(:)=log10(ptf_rauscher(nt-1:nt+2,k))
     
     call polint(t4,pf4,4,t9,pf,dpf)
     

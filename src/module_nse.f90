@@ -10,7 +10,7 @@ module module_nse
   
   logical :: use_reaclib
 
-  integer,allocatable :: ireaclib(:)
+  integer,allocatable,public :: ireaclib(:)
   integer,allocatable :: irauscher(:) 
   
 contains
@@ -279,41 +279,41 @@ contains
     
   end subroutine calc_coulomb
 
-subroutine calc_ptf_nse(t9,g)
+  subroutine calc_ptf_nse(t9,g)
 
-  use module_ptf_reaclib
-  use module_ptf_rauscher
+    use module_ptf_reaclib
+    use module_ptf_rauscher
 
-  real(8),intent(in)  :: t9
-  real(8),intent(out) :: g(n_spec)
+    real(8),intent(in)  :: t9
+    real(8),intent(out) :: g(n_spec)
 
-  integer :: i, ir, iw
-  real(8) :: pf
+    integer :: i, ir, iw
+    real(8) :: pf
 
-  do i=1,n_spec
-     
-     iw = ireaclib(i)
-     ir = irauscher(i)
-     
-     if (ir > 0) then
+    do i=1,n_spec
 
-        ! Rauscher spin + Rauscher PF
-        call get_ptf_rauscher(t9,ir,pf)
+       iw = ireaclib(i)
+       ir = irauscher(i)
 
-        g(i) = (2d0*spin_rauscher(ir) + 1d0)*pf
+       if (ir > 0) then
 
-     else
+          ! Rauscher spin + Rauscher PF
+          call get_ptf_rauscher(t9,ir,pf)
 
-        ! WinVNE fallback
-        call get_ptf_reaclib(t9,iw,pf)
+          g(i) = (2d0*spin_rauscher(ir) + 1d0)*pf
 
-        g(i) = (2d0*spn_reaclib(iw) + 1d0)*pf
+       else
 
-     endif
+          ! WinVNE fallback
+          call get_ptf_reaclib(t9,iw,pf)
 
-  enddo
+          g(i) = (2d0*spn_reaclib(iw) + 1d0)*pf
 
-end subroutine calc_ptf_nse
+       endif
+
+    enddo
+
+  end subroutine calc_ptf_nse
 
 
   ! coulomb correction in Hempel+2010 Eq.(6)
@@ -452,7 +452,7 @@ end subroutine calc_ptf_nse
     
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(use_reaclib)call calc_ptf_reaclib(t9,g)
+    if(use_reaclib) call calc_ptf_nse(t9,g)
     
     if(use_reaclib)then
        call calc_coulomb(rho,ye,fcoul)
@@ -760,7 +760,7 @@ end subroutine calc_ptf_nse
 
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(use_reaclib)call calc_ptf_reaclib(t9,g)
+    if(use_reaclib)call calc_ptf_nse(t9,g)
 
     if(use_reaclib)then
        call calc_coulomb(rho,ye,fcoul)

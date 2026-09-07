@@ -120,7 +120,7 @@ program make_nse_table
            call index_rank(n_rank, n_spec, xnse, index_r, 1d0)
            
            write(11,'(" ",11es16.7e3)') rho,temp,ye, mexc_ave, z_heavy, a_heavy, x_heavy, ytot, xnse(k_n), xnse(k_p), xnse(k_4he)
-           write(12,'(" ",3es16.7e3,10a16,10es16.7e3)')rho,temp,ye, (name_reaclib(index_r(i)),i=1,n_rank), (xnse(index_r(i)),i=1,n_rank)
+           write(12,'(" ",3es16.7e3,10a16,10es16.7e3)')rho,temp,ye, (name_reaclib(ireaclib(index_r(i))),i=1,n_rank), (xnse(index_r(i)),i=1,n_rank)
 
            if(nsefail)then
               write(6,'("failed",3i5,99es12.4)') irho,itemp,iye,rho,temp,ye, err_out

@@ -44,16 +44,16 @@ contains
     allocate ( name_reaclib(nct_reaclib),ref_reaclib(2,nct_reaclib))
     allocate ( bhf_reaclib(nct_reaclib),bex_reaclib(nct_reaclib))
     allocate ( npt_reaclib(nct_reaclib),nnt_reaclib(nct_reaclib),naw_reaclib(nct_reaclib))
-    allocate ( ams_reaclib(nct_reaclib),spn_reaclib(nct_reaclib),exc_reaclib(nct_reaclib),ptf_reaclib(nct_reaclib,24))
+    allocate ( ams_reaclib(nct_reaclib),spn_reaclib(nct_reaclib),exc_reaclib(nct_reaclib),ptf_reaclib(24,nct_reaclib))
     
     do k=1,nct_reaclib
        ! read(10,'(a5,f12.3,i4,i4,f6.1,f10.3,1x,a5)') name_reaclib(k),ams_reaclib(k),npt_reaclib(k),nnt_reaclib(k),spn_reaclib(k),exc_reaclib(k),ref_reaclib(1,k)
        read(10,'(a5,f12.3,i4,i4,f6.1,f10.3)') name_reaclib(k),ams_reaclib(k),npt_reaclib(k),nnt_reaclib(k),spn_reaclib(k),exc_reaclib(k)!,ref_reaclib(1,k)
        !write(6,*) k,name_reaclib(k),ams_reaclib(k),npt_reaclib(k),nnt_reaclib(k),spn_reaclib(k),exc_reaclib(k)!,ref_reaclib(1,k)
        !ref_reaclib(2,k) = ref_reaclib(1,k)
-       read(10,*) (ptf_reaclib(k,i),i=1 ,8 )
-       read(10,*) (ptf_reaclib(k,i),i=9 ,16)
-       read(10,*) (ptf_reaclib(k,i),i=17,24)
+       read(10,*) (ptf_reaclib(i,k),i=1 ,8 )
+       read(10,*) (ptf_reaclib(i,k),i=9 ,16)
+       read(10,*) (ptf_reaclib(i,k),i=17,24)
        
        ! if(npt_reaclib(k)==26 .and. nnt_reaclib(k) ==30)then
        !    write(6,*) str1
@@ -114,7 +114,7 @@ contains
 
     t4(:) = t9_reaclib(nt-1:nt+2)
 
-    pf4(:)=log10(ptf_reaclib(k,nt-1:nt+2))
+    pf4(:)=log10(ptf_reaclib(nt-1:nt+2,k))
     
     call polint(t4,pf4,4,t9,pf,dpf)
     
@@ -142,7 +142,7 @@ contains
 
     if(t9>t9_reaclib(24))then
        do k=1,nct_reaclib
-          g(k) = g(k) * ptf_reaclib(k,24)
+          g(k) = g(k) * ptf_reaclib(24,k)
        enddo
        return
     endif
@@ -161,7 +161,7 @@ contains
        ! do l=1,4
        !    pf4(l)=ptf_reaclib(k,nt-2+l)
        ! enddo
-       pf4(:)=log10(ptf_reaclib(k,nt-1:nt+2))
+       pf4(:)=log10(ptf_reaclib(nt-1:nt+2,k))
 
        call polint(t4,pf4,4,t9,pf,dpf)
 
