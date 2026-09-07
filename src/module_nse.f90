@@ -181,22 +181,8 @@ contains
     logge(1:n_spec) = log(g(1:n_spec)) + 2.5d0*log(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp) &
          - fcoul(1:n_spec)*mev2erg/(kerg*temp)
     
-    ! nb = rho/mu
-    ! do i_spec = 1,n_spec
-    !    if(a(i_spec) > 1)then
-    !       logge(i_spec) = logge(i_spec) + log10(max(1d-99,1d0-nb/n0))
-    !    endif
-    ! enddo
-    
-    ! write(6,'(99es12.4)') logrho0, log10(mu*(mu*kerg*temp/(2d0*pi*hbar*hbar))**1.5d0/rho)
-    ! write(6,'(99es12.4)') logge(1:n_spec)
-    ! write(6,'(99es12.4)') mexc(1:n_spec)
-    ! write(6,'(99es12.4)') - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
-    ! stop
-    
     if(present(xn_history)) xn_history(:) = 0d0
     if(present(xp_history)) xp_history(:) = 0d0
-
 
     ! use two-nuclei approx for initial guess
     if(use_TNAguess)then
@@ -251,7 +237,7 @@ contains
              call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
              logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
              !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
-             if( abs(det)>0d0 .and. maxval(logx(:))<3d2*log(10d0) .and. dx<0d0 .and.dye<0d0)then
+             if( abs(det)>0d0 .and. dx<0d0 .and.dye<0d0)then
                 exit
              else
                 !xn = xn - 1d0
@@ -338,13 +324,14 @@ contains
        endif
     enddo
 
-    logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
-    logx(1:n_spec) = max(-3d2*log(10d0),min(3d2*log(10d0),logx(1:n_spec)))
-    
-    x(1:n_spec) = exp(logx(1:n_spec))
-    !write(6,*) itr,xn,xp
-    xnse(:) = x(:)
+    logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
 
+    block
+      real(8) :: logx_max, u(n_spec)
+      logx_max = maxval(logx(:))
+      u(:) = exp(logx(:) - logx_max)
+      xnse(:) = u(:) / sum(u(:))
+    end block
     if(present(xn_out)) xn_out = xn
     if(present(xp_out)) xp_out = xp
 
@@ -564,61 +551,35 @@ contains
     real(8) :: xsum,yesum
     real(8) :: det,dxdn,dxdp,dyedn,dyedp
 
-    real(8) :: u(n_spec), logx_max, logx_sum, usum, w(n_spec), qbar
+    real(8) :: u(n_spec), logx_max, logx_sum, usum, qusum, w(n_spec), qbar
     real(8) :: f1, f2, nbar, zbar, qnbar, qzbar, df1dn, df1dp, df2dn, df2dp
     ! real(8) :: ave_a,a11,a12,a21,a22
 
-    logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
+    logx(:) = logge(:) + z(:)*xp + n(:)*xn
 
     logx_max = maxval(logx(:))
-    
+
     u(:) = exp(logx(:) - logx_max)
-    usum = sum(u(:))
 
-    w(:) = u(:)/usum
-
-    logx_sum = logx_max + log(usum)
-
-    x(1:n_spec) = exp(logx(1:n_spec))
-    
-    qbar = sum(zai(:)*w(:))
+    usum  = sum(u(:))
+    qusum = sum(zai(:)*u(:))
 
     ! residuals
-    f1 = logx_sum
-    f2 = qbar - ye
-
-    ! weighted moments
-    nbar  = sum(n(:)*w(:))
-    zbar  = sum(z(:)*w(:))
-    qnbar = sum(zai(:)*n(:)*w(:))
-    qzbar = sum(zai(:)*z(:)*w(:))
-
-    ! Jacobian
-    df1dn = nbar
-    df1dp = zbar
-
-    df2dn = qnbar - qbar*nbar
-    df2dp = qzbar - qbar*zbar
+    f1 = logx_max + log(usum)
+    f2 = logx_max + log(qusum) - log(ye)
     
+    ! Jacobian
+    df1dn = sum(n(:)*u(:)) / usum
+    df1dp = sum(z(:)*u(:)) / usum
+    
+    df2dn = sum(n(:)*zai(:)*u(:)) / qusum
+    df2dp = sum(z(:)*zai(:)*u(:)) / qusum
+
+
     det = df1dn*df2dp - df1dp*df2dn
-    if( det == 0d0)then
-       !write(6,*) "det = 0",dxdn*dyedp, dxdp*dyedn, dxdn,dxdp,dyedn,dyedp
-       !det = 1d0
-       dxn = (-f1*df2dp + df1dp*f2)
-       dxp = ( df2dn*f1 - df1dn*f2)
-       ! ave_a = 2d0
-       ! a11 = - (x(1)+2d0*x(2))/x(3)/ave_a
-       ! a12 = - (x(2)+2d0*x(1))/x(3)/ave_a
-       ! a21 = - (     4d0*x(2))/x(3)/ave_a
-       ! a22 = - (     2d0*x(2))/x(3)/ave_a
-       ! det = ave_a**2*(a11+a22+a11*a22 - (a12+a21+a12*a21))
-       
-       !write(6,*) det
-       !stop
-    else
-       dxn = (-f1*df2dp + df1dp*f2)/det
-       dxp = ( df2dn*f1 - df1dn*f2)/det
-    endif
+    
+    dxn = (-f1*df2dp + df1dp*f2)/det
+    dxp = ( df2dn*f1 - df1dn*f2)/det
 
     !dxn =-( dx*dyedp-dye*dxdp)/det
     !dxp =-(-dx*dyedn+dye*dxdn)/det
