@@ -8,3 +8,4 @@ log
 *~
 *.png
 obj
+.DS_Store
