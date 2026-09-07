@@ -16,7 +16,7 @@ program make_nse_table
   real(8),allocatable :: xnse(:)
 
   ! real(8) :: xn_history(itrlim), xp_history(itrlim)
-  logical :: nsefail, use_tnaguess
+  logical :: nsefail, use_TNAguess
   
   integer :: nrho, ntemp, nye
   real(8) :: rho_max, rho_min, temp_max, temp_min, ye_max, ye_min
@@ -77,33 +77,33 @@ program make_nse_table
 
         do irho=1,nrho
 
-           if(ntemp>1)then
+           if(nrho>1)then
               rho = 10d0**(log10(rho_min) + (log10(rho_max)-log10(rho_min))*dble(irho-1)/dble(nrho-1))
            else
               rho = rho_min
            endif
            
            
-           use_tnaguess = .false.
+           use_TNAguess = .false.
            if(irho==1)then
-              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out, xn_out = xn_out, xp_out = xp_out)
+              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,itr_out = itr_out, err_out = err_out, xn_out = xn_out, xp_out = xp_out)
            else
-              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out, xn_guess = xn_guess, xp_guess = xp_guess, xn_out = xn_out, xp_out = xp_out)
+              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,itr_out = itr_out, err_out = err_out, xn_guess = xn_guess, xp_guess = xp_guess, xn_out = xn_out, xp_out = xp_out)
            endif
            xn_guess = xn_out
            xp_guess = xp_out
 
            ! write(6,*) nsefail,itr_out,err_out
            if(nsefail) then
-              use_tnaguess = .true.
-              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out)
+              use_TNAguess = .true.
+              call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,itr_out = itr_out, err_out = err_out)
               ! write(6,*) nsefail,itr_out,err_out
            endif
-           write(6,*) irho,itemp,iye,rho,temp,ye,itr_out,use_tnaguess
+           write(6,*) irho,itemp,iye,rho,temp,ye,itr_out,use_TNAguess
            
 
            if(nsefail) then
-              ! call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,itr_out = itr_out, err_out = err_out)
+              ! call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,itr_out = itr_out, err_out = err_out)
               call two_nuclei_approx(ye,xnse)
            endif
 
@@ -116,11 +116,11 @@ program make_nse_table
 
            if(nsefail)then
               write(6,'("failed",3i5,99es12.4)') irho,itemp,iye,rho,temp,ye, err_out
-              !call test_converge(rho,temp,ye,use_tnaguess)
+              !call test_converge(rho,temp,ye,use_TNAguess)
               !call output_composition(xnse,temp,rho,ye)
               !stop
            endif
-           write(13,*) irho,itemp,iye,rho,temp,ye,itr_out,use_tnaguess
+           write(13,*) irho,itemp,iye,rho,temp,ye,itr_out,use_TNAguess
 
 
         enddo

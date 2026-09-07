@@ -12,7 +12,7 @@ module module_nse
   
 contains
   
-  subroutine nse_init(n_spec_out)
+  subroutine nse_init_four(n_spec_out)
     use const,only:mnmev,mpmev,mamev,mumev
     integer, intent(out) :: n_spec_out
     real(8),parameter :: mexc_56ni_mev = -53.907539d0
@@ -24,17 +24,17 @@ contains
     ! n
     a(1) = 1d0; z(1) = 0d0; n(1) = 1d0; g(1) = 2d0; mexc(1) = mnmev-a(1)*mumev
     ! p
-    a(2) = 1d0; z(2) = 1d0; n(2) = 0d0; g(2) = 2d0; mexc(2) = mnmev-a(2)*mumev
+    a(2) = 1d0; z(2) = 1d0; n(2) = 0d0; g(2) = 2d0; mexc(2) = mpmev-a(2)*mumev
     ! alpha
     a(3) = 4d0; z(3) = 2d0; n(3) = 2d0; g(3) = 1d0; mexc(3) = mamev-a(3)*mumev
     ! 56Ni
-    a(4) =56d0; z(4) =28d0; n(4) =28d0; g(4) = 1d0; mexc(4) = mexc_56ni_mev
+    a(4) =56d0; z(4) =28d0; n(4) =28d0; g(4) = 1d0; mexc(4) = mexc_56ni_mev-z(4)*memev
 
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
     
     n_spec_out = n_spec
     
-  end subroutine nse_init
+  end subroutine nse_init_four
 
   subroutine nse_init_reaclib(n_spec_out)
     use module_ptf_reaclib
@@ -133,7 +133,7 @@ contains
     
   end function excited_HS10
   
-  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
+  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
     real(8),intent(in) :: rho,temp,ye
@@ -141,7 +141,7 @@ contains
     real(8),intent(in) :: tol
     real(8),intent(out) :: xnse(n_spec)
     logical,intent(out) :: nsefail
-    logical,intent(in) :: use_tnaguess
+    logical,intent(in) :: use_TNAguess
     real(8),intent(out),optional :: xn_history(0:itrlim),xp_history(0:itrlim)
     integer,intent(out),optional :: itr_out
     real(8),intent(out),optional :: err_out
@@ -199,7 +199,7 @@ contains
 
 
     ! use two-nuclei approx for initial guess
-    if(use_tnaguess)then
+    if(use_TNAguess)then
        block
          integer :: k1,k2
          real(8) :: eta01ex, eta02ex
@@ -227,9 +227,9 @@ contains
          mex2 = mexc(k2)*mev2erg
          
          ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT / ln(10)
-         eta01ex = (logrho0 + log10(x1) - log10(g1) - 2.5d0*log10(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp))/log(10d0)
+         eta01ex = -logrho0 + log10(x1) - log10(g1) - 2.5d0*log10(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp)/log(10d0)
          ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT / ln(10)
-         eta02ex = (logrho0 + log10(x2) - log10(g2) - 2.5d0*log10(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp))/log(10d0)
+         eta02ex = -logrho0 + log10(x2) - log10(g2) - 2.5d0*log10(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp)/log(10d0)
          
          xn = (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1)
          xp = (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
@@ -344,7 +344,7 @@ contains
     xnse(:) = x(:)
 
     if(present(xn_out)) xn_out = xn
-    if(present(xn_out)) xp_out = xp
+    if(present(xp_out)) xp_out = xp
 
   end subroutine calc_nse
 
@@ -450,12 +450,12 @@ contains
     
   end subroutine two_nuclei_approx_index
 
-  subroutine test_converge(rho,temp,ye,use_tnaguess)
+  subroutine test_converge(rho,temp,ye,use_TNAguess)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
 
     real(8),intent(in) :: rho,temp,ye
-    logical,intent(in) :: use_tnaguess
+    logical,intent(in) :: use_TNAguess
     real(8) :: logrho0
     real(8) :: logge(n_spec), fcoul(n_spec)
     
@@ -475,7 +475,7 @@ contains
     logical :: nsefail
     real(8) :: t9
 
-    call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,xn_history,xp_history,itr_out)
+    call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out)
     !write(6,*) xnse(:)
     write(6,*) itr_out
 
