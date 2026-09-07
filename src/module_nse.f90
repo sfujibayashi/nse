@@ -2,7 +2,7 @@ module module_nse
   implicit none
 
   private
-  public :: nse_init,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic, two_nuclei_approx
+  public :: nse_init_four,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic, two_nuclei_approx
 
   integer :: n_spec
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), g(:), zai(:)
@@ -13,7 +13,7 @@ module module_nse
 contains
   
   subroutine nse_init_four(n_spec_out)
-    use const,only:mnmev,mpmev,mamev,mumev
+    use const,only:mnmev,mpmev,mamev,mumev,memev
     integer, intent(out) :: n_spec_out
     real(8),parameter :: mexc_56ni_mev = -53.907539d0
 
@@ -127,11 +127,11 @@ contains
     
   end subroutine calc_ptf_HS10
 
-  function excited_HS10(temp, a) result g
-    real(8),intent(in) :: temp, a
-    real(8),parameter :: c1=0.2, c2=0.8
+  ! function excited_HS10(temp, a) result g
+  !   real(8),intent(in) :: temp, a
+  !   real(8),parameter :: c1=0.2, c2=0.8
     
-  end function excited_HS10
+  ! end function excited_HS10
   
   subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
@@ -165,8 +165,8 @@ contains
     integer :: i_spec
     real(8) :: nb
     
-    ! log10(rho0/rho)
-    logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
+    ! log(rho0/rho)
+    logrho0 = 2.5d0*log(mu) + 1.5d0*log(kerg*temp) - 1.5d0*log(2d0*pi) - 3d0*log(hbar) - log(rho)
     
     ! partition function may be calculated here
     t9 = temp/1d9
@@ -178,8 +178,8 @@ contains
        fcoul(:) = 0d0
     endif
     !
-    logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0) &
-         - fcoul(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
+    logge(1:n_spec) = log(g(1:n_spec)) + 2.5d0*log(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp) &
+         - fcoul(1:n_spec)*mev2erg/(kerg*temp)
     
     ! nb = rho/mu
     ! do i_spec = 1,n_spec
@@ -226,10 +226,10 @@ contains
          mex1 = mexc(k1)*mev2erg
          mex2 = mexc(k2)*mev2erg
          
-         ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT / ln(10)
-         eta01ex = -logrho0 + log10(x1) - log10(g1) - 2.5d0*log10(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp)/log(10d0)
-         ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT / ln(10)
-         eta02ex = -logrho0 + log10(x2) - log10(g2) - 2.5d0*log10(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp)/log(10d0)
+         ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT
+         eta01ex = -logrho0 + log(x1) - log(g1) - 2.5d0*log(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp)
+         ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT
+         eta02ex = -logrho0 + log(x2) - log(g2) - 2.5d0*log(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp)
          
          xn = (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1)
          xp = (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
@@ -251,11 +251,13 @@ contains
              call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
              logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
              !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
-             if( abs(det)>0d0 .and. maxval(logx(:))<3d2 .and. dx<0d0 .and.dye<0d0)then
+             if( abs(det)>0d0 .and. maxval(logx(:))<3d2*log(10d0) .and. dx<0d0 .and.dye<0d0)then
                 exit
              else
-                xn = xn - 1d0
-                xp = xp - 1d0
+                !xn = xn - 1d0
+                !xp = xp - 1d0
+                xn = xn-log(10d0)
+                xp = xp-log(10d0)
              endif
              
           enddo
@@ -323,7 +325,7 @@ contains
 
        ! write(6,'(i5,99es15.7)') itr,xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp,dl
        fac = 1d0
-       if(dl>0.5d0)fac = 0.5d0/dl
+       if(dl>0.5d0*log(10d0))fac = 0.5d0*log(10d0)/dl
        !if(max(abs(dxn/xn),abs(dxp/xp)) > 0.5d0) fac = 0.5d0/max(abs(dxn/xn),abs(dxp/xp))
        !write(6,*) xn,xp
        
@@ -337,9 +339,9 @@ contains
     enddo
 
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn 
-    logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
+    logx(1:n_spec) = max(-3d2*log(10d0),min(3d2*log(10d0),logx(1:n_spec)))
     
-    x(1:n_spec) = 10d0**logx(1:n_spec)
+    x(1:n_spec) = exp(logx(1:n_spec))
     !write(6,*) itr,xn,xp
     xnse(:) = x(:)
 
@@ -485,7 +487,7 @@ contains
     enddo
     close(98)
     
-    logrho0 = 2.5d0*log10(mu) + 1.5d0*log10(kerg*temp) - 1.5d0*log10(2d0*pi) - 3d0*log10(hbar) - log10(rho)
+    logrho0 = 2.5d0*log(mu) + 1.5d0*log(kerg*temp) - 1.5d0*log(2d0*pi) - 3d0*log(hbar) - log(rho)
 
     ! partition function may be calculated here
     t9 = temp/1d9
@@ -497,8 +499,8 @@ contains
        fcoul(:) = 0d0
     endif
     !
-    logge(1:n_spec) = log10(g(1:n_spec)) + 2.5d0*log10(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp)/log(10d0) &
-         - fcoul(1:n_spec)*mev2erg/(kerg*temp)/log(10d0)
+    logge(1:n_spec) = log(g(1:n_spec)) + 2.5d0*log(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp) &
+         - fcoul(1:n_spec)*mev2erg/(kerg*temp)
 
     nn=100
     np=100
@@ -566,9 +568,9 @@ contains
 
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
 
-    logx(1:n_spec) = max(-3d2,min(3d2,logx(1:n_spec)))
+    logx(1:n_spec) = max(-3d2*log(10d0),min(3d2*log(10d0),logx(1:n_spec)))
 
-    x(1:n_spec) = 10d0**logx(1:n_spec)
+    x(1:n_spec) = exp(logx(1:n_spec))
     
     xsum = sum(x(1:n_spec))
     yesum= sum(zai(1:n_spec)*x(1:n_spec))
@@ -585,8 +587,8 @@ contains
     dyedn = dyedn/yesum! - dxdn
     dyedp = dyedp/yesum! - dxdp
 
-    dx  = log10(xsum)
-    dye = log10(yesum/ye)
+    dx  = log(xsum)
+    dye = log(yesum/ye)
 
     
     det = dxdn*dyedp - dxdp*dyedn
