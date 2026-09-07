@@ -2,13 +2,16 @@ module module_nse
   implicit none
 
   private
-  public :: nse_init_four,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic, two_nuclei_approx
+  public :: nse_init_four,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic, two_nuclei_approx, calc_ptf_HS
 
   integer :: n_spec
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), g(:), zai(:)
   character(5),allocatable :: name_nucl(:)
   
   logical :: use_reaclib
+
+  integer,allocatable :: ireaclib(:)
+  integer,allocatable :: irauscher(:) 
   
 contains
   
@@ -38,40 +41,115 @@ contains
 
   subroutine nse_init_reaclib(n_spec_out)
     use module_ptf_reaclib
+    use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
     use const,only:memev
     integer, intent(out) :: n_spec_out
-    integer :: k
+    integer :: k,j,i
 
+    integer,allocatable :: jrauscher(:) 
+
+    allocate(jrauscher(nct_reaclib))
+
+    ireaclib(:) = 0
+
+    do k = 1, nct_reaclib
+       ireaclib(k) = k
+    enddo
+
+    jrauscher(:) = 0    
+    do k = 1, nct_reaclib
+       
+       if (naw_reaclib(k) == 1) cycle
+       
+       do j = 1, nct_rauscher
+          if (npt_reaclib(k) == z_rauscher(j) .and. &
+               naw_reaclib(k) == a_rauscher(j)) then
+             jrauscher(k) = j
+             exit
+          endif
+       enddo
+       
+    enddo
+    
+    n_spec = 0
+    do k = 1, nct_reaclib
+       
+       if (naw_reaclib(k) == 1) then
+          ! n, p
+          n_spec = n_spec + 1
+       else if (jrauscher(k) > 0) then
+          n_spec = n_spec + 1
+       endif
+       
+    enddo
+
+    write(6,'(a,i6)') "Rauscher matched species = ", count(jrauscher > 0)
+    write(6,'(a,i6)') "NSE species kept        = ", n_spec
+
+
+    block
+      integer :: nmiss
+      nmiss = 0
+      do k = 1, nct_reaclib
+         
+         if (jrauscher(k) == 0) then
+            nmiss = nmiss + 1
+            
+            write(*,'(a5,3i6)') &
+                 name_reaclib(k), &
+                 naw_reaclib(k), &
+                 npt_reaclib(k), &
+                 nnt_reaclib(k)
+         endif
+         
+      enddo
+
+      write(*,*) "Missing from Rauscher =", nmiss
+    end block
+
+
+    allocate(ireaclib(n_spec))
+    allocate(irauscher(n_spec))
+    
+    i = 0
+    do k=1,nct_reaclib
+       
+       ! Rauscher matched
+       if (jrauscher(k) > 0) then
+          
+          i = i + 1
+          ireaclib(i)  = k
+          irauscher(i) = jrauscher(k)
+          
+          ! Rauscher missing, but keep non-superheavy species
+       else if (npt_reaclib(k) < 87) then
+          
+          i = i + 1
+          ireaclib(i)  = k
+          irauscher(i) = 0
+          
+       endif
+       
+    enddo
+
+    allocate(name_nucl(n_spec))
+    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec), zai(n_spec))
+    
     use_reaclib = .true.
 
     n_spec = nct_reaclib
     allocate(name_nucl(n_spec))
     allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
 
-    do k=1,nct_reaclib
+    do i=1,nct_reaclib
+       k = ireaclib(i)
        a(k) = ams_reaclib(k)
        z(k) = dble(npt_reaclib(k))
        n(k) = dble(nnt_reaclib(k))
        mexc(k) = exc_reaclib(k) - z(k)*memev
        name_nucl(k) = name_reaclib(k)
     enddo
-
-    ! block 
-    !   use const,only : mumev
-    !   real(8) :: mexcpb = 0d0
-    !   integer :: k_min
-    !   k_min = 0
-    !   do k=1,nct_reaclib
-    !      if(mexcpb> mexc(k)/a(k))then
-    !         mexcpb = mexc(k)/a(k)
-    !         k_min = k
-    !      endif
-         
-    !   enddo
-    !   write(6,*) mexcpb, mexcpb/mumev, a(k_min),z(k_min)
-    !   stop
-    ! end block
-
+    
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
     
     n_spec_out = n_spec
@@ -102,6 +180,43 @@ contains
     enddo
     
   end subroutine calc_coulomb
+
+subroutine calc_ptf_nse(t9,g)
+
+  use module_ptf_reaclib
+  use module_ptf_rauscher
+
+  real(8),intent(in)  :: t9
+  real(8),intent(out) :: g(n_spec)
+
+  integer :: i, ir, iw
+  real(8) :: pf
+
+  do i=1,n_spec
+     
+     iw = ireaclib(i)
+     ir = irauscher(i)
+     
+     if (ir > 0) then
+
+        ! Rauscher spin + Rauscher PF
+        call get_ptf_rauscher(t9,ir,pf)
+
+        g(i) = (2d0*spin_rauscher(ir) + 1d0)*pf
+
+     else
+
+        ! WinVNE fallback
+        call get_ptf_reaclib(t9,iw,pf)
+
+        g(i) = (2d0*spn_reaclib(iw) + 1d0)*pf
+
+     endif
+
+  enddo
+
+end subroutine calc_ptf_nse
+
 
   ! coulomb correction in Hempel+2010 Eq.(6)
   function Ecoul_HS10_eq6(z, a, n0, ne) result(ecoul)

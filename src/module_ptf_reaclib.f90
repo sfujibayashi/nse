@@ -98,6 +98,39 @@ contains
 
   end subroutine init_ptf_reaclib
 
+  subroutine get_ptf_reaclib(t9, k, pf)
+    real(8),intent(in) :: t9
+    integer,intent(in) :: k
+    real(8),intent(out) :: pf
+
+    real(8) :: t4(4),pf4(4),dpf
+    real(8) :: g0, logpf
+    integer :: nt
+
+    g0 = (2d0*spn_reaclib(k)+1d0)
+    
+    if(t9_reaclib(2) <= t9 .and. t9 <= t9_reaclib(22))then
+       call locate(t9_reaclib, 24,t9,nt)
+    elseif(t9 < t9_reaclib(2))then
+       nt = 2
+    elseif(t9 > t9_reaclib(22))then
+       nt = 22
+    endif
+
+    t4(:) = t9_reaclib(nt-1:nt+2)
+
+    pf4(:)=log10(ptf_reaclib(k,nt-1:nt+2))
+    
+    call polint(t4,pf4,4,t9,pf,dpf)
+    
+    if( 3<=nt .and. nt<=21 .and. (pf > max(pf4(2),pf4(3)) .or. pf < min(pf4(2),pf4(3))) ) then
+       logpf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
+    endif
+
+    pf = g0 * 10d0**logpf
+    
+  end subroutine get_ptf_reaclib
+
   subroutine calc_ptf_reaclib(t9,g)
     real(8),intent(in) :: t9
     real(8),intent(out) :: g(nct_reaclib)
