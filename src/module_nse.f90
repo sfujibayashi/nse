@@ -86,9 +86,9 @@ contains
     integer :: k
     real(8) :: ne, v_n, v_c, u
     real(8),parameter :: n0 = 0.16d0*1d39
-
+    
     fcoul(:) = 0d0
-
+    
     ne = ye*rho/mu
     do k=1,n_spec
        if( z(k)>0.d0)then
@@ -102,6 +102,36 @@ contains
     enddo
     
   end subroutine calc_coulomb
+
+  function Ecoul_HS10_eq6(z, a, n0, ne) result(ecoul)
+    use const, only : pi, fine
+    real(8),intent(in) :: z,a,n0,ne
+    real(8) :: ecoul
+    real(8) :: x,r
+
+    x = (ne/n0 * a/z)**(1d0/3d0)
+    r = ((3d0*a)/(4d0*pi*n0))**(1d0/3d0)
+    ecoul = -3d0/5d0 * z*z*fine/r*(3d0/2d0*x - 1d0/2d0*x*x*x) 
+    
+  end function Ecoul_HS10_eq6
+
+  subroutine calc_ptf_HS10(t9,g)
+    real(8),intent(in) :: t9
+    real(8),intent(out) :: g(n_spec)
+    
+    integer :: k
+
+    do k=1,n_spec
+       
+    end do
+    
+  end subroutine calc_ptf_HS10
+
+  function excited_HS10(temp, a) result g
+    real(8),intent(in) :: temp, a
+    real(8),parameter :: c1=0.2, c2=0.8
+    
+  end function excited_HS10
   
   subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_tnaguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
