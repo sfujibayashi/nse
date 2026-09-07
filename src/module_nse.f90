@@ -245,8 +245,8 @@ contains
           xp = xp_guess
           xn = xn_guess
        else
-          xn = -2d0 - logge(1)! + 100d0*ye/(temp/1.16d9)*0d0
-          xp = -2d0 - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
+          xn = -2d0*log(10d0) - logge(1)! + 100d0*ye/(temp/1.16d9)*0d0
+          xp = -2d0*log(10d0) - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
           do itr=1,10000
              call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
              logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
@@ -564,39 +564,48 @@ contains
     real(8) :: xsum,yesum
     real(8) :: det,dxdn,dxdp,dyedn,dyedp
 
+    real(8) :: u(n_spec), logx_max, logx_sum, usum, w(n_spec), qbar
+    real(8) :: f1, f2, nbar, zbar, qnbar, qzbar, df1dn, df1dp, df2dn, df2dp
     ! real(8) :: ave_a,a11,a12,a21,a22
 
     logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
 
-    logx(1:n_spec) = max(-3d2*log(10d0),min(3d2*log(10d0),logx(1:n_spec)))
+    logx_max = maxval(logx(:))
+    
+    u(:) = exp(logx(:) - logx_max)
+    usum = sum(u(:))
+
+    w(:) = u(:)/usum
+
+    logx_sum = logx_max + log(usum)
 
     x(1:n_spec) = exp(logx(1:n_spec))
     
-    xsum = sum(x(1:n_spec))
-    yesum= sum(zai(1:n_spec)*x(1:n_spec))
+    qbar = sum(zai(:)*w(:))
 
-    dxdn = sum(n(1:n_spec)*x(1:n_spec))
-    dxdp = sum(z(1:n_spec)*x(1:n_spec))
+    ! residuals
+    f1 = logx_sum
+    f2 = qbar - ye
+
+    ! weighted moments
+    nbar  = sum(n(:)*w(:))
+    zbar  = sum(z(:)*w(:))
+    qnbar = sum(zai(:)*n(:)*w(:))
+    qzbar = sum(zai(:)*z(:)*w(:))
+
+    ! Jacobian
+    df1dn = nbar
+    df1dp = zbar
+
+    df2dn = qnbar - qbar*nbar
+    df2dp = qzbar - qbar*zbar
     
-    dyedn = sum(n(1:n_spec)*zai(1:n_spec)*x(1:n_spec))
-    dyedp = sum(z(1:n_spec)*zai(1:n_spec)*x(1:n_spec))
-
-    dxdn = dxdn/xsum
-    dxdp = dxdp/xsum
-    
-    dyedn = dyedn/yesum! - dxdn
-    dyedp = dyedp/yesum! - dxdp
-
-    dx  = log(xsum)
-    dye = log(yesum/ye)
-
-    
-    det = dxdn*dyedp - dxdp*dyedn
+    det = df1dn*df2dp - df1dp*df2dn
     if( det == 0d0)then
        !write(6,*) "det = 0",dxdn*dyedp, dxdp*dyedn, dxdn,dxdp,dyedn,dyedp
        !det = 1d0
-       dxn = -( dx*dyedp-dye*dxdp)
-       dxp = -(-dx*dyedn+dye*dxdn)
+       dxn = (-f1*df2dp + df1dp*f2)
+       dxp = ( df2dn*f1 - df1dn*f2)
        ! ave_a = 2d0
        ! a11 = - (x(1)+2d0*x(2))/x(3)/ave_a
        ! a12 = - (x(2)+2d0*x(1))/x(3)/ave_a
@@ -607,18 +616,19 @@ contains
        !write(6,*) det
        !stop
     else
-       dxn =-( dx*dyedp-dye*dxdp)/det
-       dxp =-(-dx*dyedn+dye*dxdn)/det
+       dxn = (-f1*df2dp + df1dp*f2)/det
+       dxp = ( df2dn*f1 - df1dn*f2)/det
     endif
 
     !dxn =-( dx*dyedp-dye*dxdp)/det
     !dxp =-(-dx*dyedn+dye*dxdn)/det
-
+    dx = f1
+    dye= f2
     if(present(det_out)) det_out = det
-    if(present(dxdn_out)) dxdn_out = dxdn
-    if(present(dxdp_out)) dxdp_out = dxdp
-    if(present(dyedn_out)) dyedn_out = dyedn
-    if(present(dyedp_out)) dyedp_out = dyedp
+    if(present(dxdn_out)) dxdn_out = df1dn
+    if(present(dxdp_out)) dxdp_out = df1dp
+    if(present(dyedn_out)) dyedn_out = df2dn
+    if(present(dyedp_out)) dyedp_out = df2dp
   end subroutine step
 
 
