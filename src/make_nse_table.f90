@@ -30,6 +30,7 @@ program make_nse_table
   integer :: k_n, k_p, k_4he
 
   character(256) :: fn_out, fn_winv, fn_raucher
+  logical :: use_rauscher_ptf
 
   real(8) :: xn_guess, xp_guess, xn_out, xp_out
 
@@ -41,6 +42,7 @@ program make_nse_table
   
   open(10,file=fn_para,status="old",action="read")
   read(10,*);read(10,'(a)') fn_winv
+  read(10,*);read(10,'(L)') use_rauscher_ptf
   read(10,*);read(10,'(a)') fn_raucher
   read(10,*);read(10,'(a)') fn_out
   read(10,*);read(10,*) nrho, rho_min, rho_max
@@ -55,7 +57,7 @@ program make_nse_table
 
   call init_ptf_reaclib(fn_winv)
   call init_ptf_rauscher(fn_raucher)
-  call nse_init_reaclib(n_spec)
+  call nse_init_reaclib(n_spec, use_rauscher_ptf)
 
   allocate(xnse(n_spec))
 

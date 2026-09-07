@@ -26,6 +26,8 @@ module module_ptf_rauscher
   real(8),allocatable :: spin_rauscher(:)
   real(8),allocatable :: ptf_rauscher(:,:)
 
+  integer,allocatable :: jnuc_rauscher(:,:)
+
   public :: init_ptf_rauscher
 
 contains
@@ -125,9 +127,17 @@ contains
        stop
     endif
 
+    allocate ( jnuc_rauscher(1:maxval(a_rauscher(:)),0:maxval(z_rauscher(:))) )
+
+    jnuc_rauscher(:,:)=0
+    do k=1,nct_rauscher
+       jnuc_rauscher(a_rauscher(k),z_rauscher(k)) = k
+    enddo
+    
   end subroutine init_ptf_rauscher
 
   subroutine get_ptf_rauscher(t9, k, pf)
+
     real(8),intent(in) :: t9
     integer,intent(in) :: k
     real(8),intent(out) :: pf
@@ -135,27 +145,79 @@ contains
     real(8) :: t4(4),pf4(4),dpf
     integer :: nt
 
-    if(t9_rauscher(2) <= t9 .and. t9 <= t9_rauscher(nt_rauscher-2))then
-       call locate(t9_rauscher, nt_rauscher,t9,nt)
-    elseif(t9 < t9_rauscher(2))then
+    ! Current NSE use: T9 <= 10
+    if (t9_rauscher(2) <= t9 .and. t9 <= t9_rauscher(22)) then
+
+       call locate(t9_rauscher, 24, t9, nt)
+
+    elseif (t9 < t9_rauscher(2)) then
+
        nt = 2
-    elseif(t9 > t9_rauscher(nt_rauscher-2))then
-       nt = nt_rauscher-2
+
+    elseif (t9 > t9_rauscher(22) .and. t9 <= t9_rauscher(24)) then
+
+       nt = 22
+
+    else
+
+       write(*,*) "ERROR: get_ptf_rauscher: T9 outside current range:",t9
+       stop
+
     endif
 
-    t4(:) = t9_rauscher(nt-1:nt+2)
+    t4(:)  = t9_rauscher(nt-1:nt+2)
+    pf4(:) = log10(ptf_rauscher(nt-1:nt+2,k))
 
-    pf4(:)=log10(ptf_rauscher(nt-1:nt+2,k))
-    
+    if (any(ptf_rauscher(nt-1:nt+2,k) <= 0d0)) then
+       write(*,*) "ERROR: invalid Rauscher PF:", &
+            z_rauscher(k),a_rauscher(k),t9
+       stop
+    endif
+
     call polint(t4,pf4,4,t9,pf,dpf)
-    
-    if( 3<=nt .and. nt<=nt_rauscher-3 .and. (pf > max(pf4(2),pf4(3)) .or. pf < min(pf4(2),pf4(3))) ) then
-       pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
+
+    if (3 <= nt .and. nt <= 21 .and. &
+         (pf > max(pf4(2),pf4(3)) .or. &
+         pf < min(pf4(2),pf4(3)))) then
+
+       pf = (pf4(3)-pf4(2))/(t4(3)-t4(2)) * &
+            (t9-t4(2)) + pf4(2)
+
     endif
 
     pf = 10d0**pf
-    
+
   end subroutine get_ptf_rauscher
+
+  ! subroutine get_ptf_rauscher(t9, k, pf)
+  !   real(8),intent(in) :: t9
+  !   integer,intent(in) :: k
+  !   real(8),intent(out) :: pf
+
+  !   real(8) :: t4(4),pf4(4),dpf
+  !   integer :: nt
+
+  !   if(t9_rauscher(2) <= t9 .and. t9 <= t9_rauscher(nt_rauscher-2))then
+  !      call locate(t9_rauscher, nt_rauscher,t9,nt)
+  !   elseif(t9 < t9_rauscher(2))then
+  !      nt = 2
+  !   elseif(t9 > t9_rauscher(nt_rauscher-2))then
+  !      nt = nt_rauscher-2
+  !   endif
+
+  !   t4(:) = t9_rauscher(nt-1:nt+2)
+
+  !   pf4(:)=log10(ptf_rauscher(nt-1:nt+2,k))
+    
+  !   call polint(t4,pf4,4,t9,pf,dpf)
+    
+  !   if( 3<=nt .and. nt<=nt_rauscher-3 .and. (pf > max(pf4(2),pf4(3)) .or. pf < min(pf4(2),pf4(3))) ) then
+  !      pf=(pf4(3)-pf4(2))/(t4(3)-t4(2))*(t9-t4(2))+pf4(2)
+  !   endif
+
+  !   pf = 10d0**pf
+    
+  ! end subroutine get_ptf_rauscher
 
 
 end module module_ptf_rauscher

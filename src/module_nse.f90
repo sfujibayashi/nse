@@ -12,7 +12,8 @@ module module_nse
 
   integer,allocatable,public :: ireaclib(:)
   integer,allocatable :: irauscher(:) 
-  
+
+  logical :: use_rauscher_ptf = .true.  
 contains
   
   subroutine nse_init_four(n_spec_out)
@@ -39,16 +40,21 @@ contains
     
   end subroutine nse_init_four
 
-  subroutine nse_init_reaclib(n_spec_out)
+  subroutine nse_init_reaclib(n_spec_out, use_rauscher_ptf_in)
 
     use module_ptf_reaclib
     use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
     use const, only: memev
 
     integer,intent(out) :: n_spec_out
+    logical,intent(in) :: use_rauscher_ptf_in
 
     integer :: i, j, k
     integer,allocatable :: jrauscher(:)
+
+    use_rauscher_ptf = use_rauscher_ptf_in
+
+    write(6,*) "Use Rauscher' ptf table?", use_rauscher_ptf
 
     allocate(jrauscher(nct_reaclib))
     jrauscher(:) = 0
@@ -295,7 +301,7 @@ contains
        iw = ireaclib(i)
        ir = irauscher(i)
 
-       if (ir > 0) then
+       if (use_rauscher_ptf .and. ir > 0) then
 
           ! Rauscher spin + Rauscher PF
           call get_ptf_rauscher(t9,ir,pf)
