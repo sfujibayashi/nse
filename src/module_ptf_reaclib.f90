@@ -98,7 +98,7 @@ contains
 
   end subroutine init_ptf_reaclib
 
-  subroutine calc_ptf(t9,g)
+  subroutine calc_ptf_reaclib(t9,g)
     real(8),intent(in) :: t9
     real(8),intent(out) :: g(nct_reaclib)
     
@@ -149,8 +149,8 @@ contains
        ! endif
     enddo
     
-  end subroutine calc_ptf
-
+  end subroutine calc_ptf_reaclib
+  
   subroutine output_reduced_table
     integer :: nn_lim, nz_lim
     character(100) :: fn
