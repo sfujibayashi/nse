@@ -3,7 +3,7 @@ EXE_DIR := bin/
 
 PROG:=$(EXE_DIR)a.out
 
-FC := gfortran-10
+FC := gfortran
 FFLAGS := -fconvert=big-endian -ffree-line-length-none #-mcmodel=large 
 FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=invalid,zero,overflow,underflow
 
@@ -14,7 +14,7 @@ FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=i
 
 .SUFFIXES: .f90 .F90 .o
 
-MOD :=  module_ptf_reaclib.f90 const_mod.f90 module_nse.f90
+MOD :=  module_ptf_reaclib.f90 module_ptf_rauscher.f90 const_mod.f90 module_nse.f90
 SRC :=  locate.f90 polint.f90 make_nse_table.f90 index_rank.f90
 
 SRC_DIR := src/

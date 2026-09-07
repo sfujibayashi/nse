@@ -39,7 +39,7 @@ contains
     enddo loop_count
     nct_reaclib = i
 
-    write(6,*) "# of species:", nct_reaclib
+    write(6,*) "# of Reaclib species:", nct_reaclib
     
     ! nct_reaclib = nct_in
     

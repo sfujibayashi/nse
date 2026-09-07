@@ -1,6 +1,7 @@
 program make_nse_table
   use module_nse
   use module_ptf_reaclib
+  use module_ptf_rauscher
   
   ! use const, only : mumev
   
@@ -28,7 +29,7 @@ program make_nse_table
 
   integer :: k_n, k_p, k_4he
 
-  character(256) :: fn_out, fn_ptf
+  character(256) :: fn_out, fn_winv, fn_raucher
 
   real(8) :: xn_guess, xp_guess, xn_out, xp_out
 
@@ -39,14 +40,21 @@ program make_nse_table
   call getarg(1, fn_para)
   
   open(10,file=fn_para,status="old",action="read")
-  read(10,*);read(10,'(a)') fn_ptf
+  read(10,*);read(10,'(a)') fn_winv
+  read(10,*);read(10,'(a)') fn_raucher
   read(10,*);read(10,'(a)') fn_out
   read(10,*);read(10,*) nrho, rho_min, rho_max
   read(10,*);read(10,*) ntemp, temp_min, temp_max
   read(10,*);read(10,*) nye, ye_min, ye_max
   close(10)
 
-  call init_ptf_reaclib(fn_ptf)
+  write(6,'(a,2es15.7,i5)') "rho  range = ",rho_min, rho_max, nrho
+  write(6,'(a,2es15.7,i5)') "temp range = ",temp_min, temp_max, ntemp
+  write(6,'(a,2es15.7,i5)') "ye   range = ",ye_min, ye_max, nye
+  write(6,'(a,i6)') "Total grid number=",nrho*ntemp*nye
+
+  call init_ptf_reaclib(fn_winv)
+  call init_ptf_rauscher(fn_raucher)
   call nse_init_reaclib(n_spec)
 
   allocate(xnse(n_spec))
