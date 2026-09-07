@@ -103,6 +103,7 @@ contains
     
   end subroutine calc_coulomb
 
+  ! coulomb correction in Hempel+2010 Eq.(6)
   function Ecoul_HS10_eq6(z, a, n0, ne) result(ecoul)
     use const, only : pi, fine
     real(8),intent(in) :: z,a,n0,ne
@@ -115,17 +116,85 @@ contains
     
   end function Ecoul_HS10_eq6
 
-  subroutine calc_ptf_HS10(t9,g)
-    real(8),intent(in) :: t9
-    real(8),intent(out) :: g(n_spec)
+  ! partition function used in HS-type EOS (Fai-Randrup)
+  subroutine calc_ptf_HS(t9,g)
+    use const, only : mev2k, mpmev, mnmev, mumev, pi
     
-    integer :: k
+    real(8),intent(in)  :: t9
+    real(8),intent(out) :: g(n_spec)
+
+    real(8),parameter :: c1 = 0.2d0
+    real(8),parameter :: c2 = 0.8d0
+
+    real(8) :: temp_mev
+    real(8) :: aa, emax, bind, g0, iexc
+    integer :: k, ia
+
+    ! T9 -> MeV
+    temp_mev = t9*1d9/mev2k
 
     do k=1,n_spec
-       
-    end do
-    
-  end subroutine calc_ptf_HS10
+
+       ia = nint(a(k))
+
+       ! free neutron / proton:
+       ! spin degeneracy = 2, no nuclear excited states
+       if (ia == 1) then
+          g(k) = 2d0
+          cycle
+       endif
+
+       ! Fai-Randrup / HS ground-state prescription
+       if (mod(ia,2) == 0) then
+          g0 = 1d0
+       else
+          g0 = 3d0
+       endif
+
+       ! Total nuclear binding energy [MeV]
+       !
+       ! mexc is the bare-nuclear mass excess:
+       ! M_nuc c^2 = A m_u c^2 + mexc
+       bind = z(k)*mpmev + n(k)*mnmev &
+            - (a(k)*mumev + mexc(k))
+
+       emax = max(bind,0d0)
+
+       if (temp_mev <= 0d0 .or. emax <= 0d0) then
+          g(k) = g0
+          cycle
+       endif
+
+       ! level-density parameter [MeV^-1]
+       aa = a(k)/8d0 * (1d0 - c2*a(k)**(-1d0/3d0))
+
+       iexc = excited_HS(temp_mev,aa,emax)
+
+       g(k) = g0 + c1/a(k)**(5d0/3d0)*iexc
+
+    enddo
+
+  contains
+
+    function excited_HS(temp,aa,emax) result(val)
+
+      real(8),intent(in) :: temp,aa,emax
+      real(8) :: val
+
+      real(8) :: cc,s0,s1
+
+      cc = temp*sqrt(aa/2d0)
+
+      s0 = -sqrt(aa*temp/2d0)
+      s1 = (sqrt(emax)-cc)/sqrt(temp)
+
+      val = exp(aa*temp/2d0) * &
+           ( cc*sqrt(pi*temp)*(erf(s1)-erf(s0)) &
+           + temp*(exp(-s0*s0)-exp(-s1*s1)) )
+
+    end function excited_HS
+
+  end subroutine calc_ptf_HS
 
   ! function excited_HS10(temp, a) result g
   !   real(8),intent(in) :: temp, a
@@ -170,8 +239,8 @@ contains
     
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(use_reaclib)call calc_ptf(t9,g)
-
+    if(use_reaclib)call calc_ptf_reaclib(t9,g)
+    
     if(use_reaclib)then
        call calc_coulomb(rho,ye,fcoul)
     else
@@ -478,7 +547,7 @@ contains
 
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(use_reaclib)call calc_ptf(t9,g)
+    if(use_reaclib)call calc_ptf_reaclib(t9,g)
 
     if(use_reaclib)then
        call calc_coulomb(rho,ye,fcoul)
@@ -540,20 +609,23 @@ contains
   end subroutine test_converge
 
 
-  subroutine step(xn,xp,ye,logge,dx,dye,dxn,dxp,det_out,dxdn_out,dxdp_out,dyedn_out,dyedp_out)
+  subroutine step(xn,xp,ye,logge,dx,dye,dxn,dxp,det_out,dxdn_out,dxdp_out,dyedn_out,dyedp_out,rcond_out)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     real(8),intent(in) :: xn,xp,ye
     real(8),intent(in) :: logge(n_spec)
     real(8),intent(out) :: dx,dye,dxn,dxp
-    real(8),intent(out),optional :: det_out,dxdn_out,dxdp_out,dyedn_out,dyedp_out
+    real(8),intent(out),optional :: det_out,dxdn_out,dxdp_out,dyedn_out,dyedp_out, rcond_out
     
     real(8) :: logx(n_spec), x(n_spec)
 
     real(8) :: xsum,yesum
     real(8) :: det,dxdn,dxdp,dyedn,dyedp
 
-    real(8) :: u(n_spec), logx_max, logx_sum, usum, qusum, w(n_spec), qbar
+    real(8) :: u(n_spec), logx_max, logx_sum, uq(n_spec), logq_max, usum, qsum, w(n_spec), qbar
     real(8) :: f1, f2, nbar, zbar, qnbar, qzbar, df1dn, df1dp, df2dn, df2dp
-    ! real(8) :: ave_a,a11,a12,a21,a22
+
+    real(8),parameter :: rcond_min = 1d-12
+    real(8) :: jnorm1, adjnorm1, rcond
 
     logx(:) = logge(:) + z(:)*xp + n(:)*xn
 
@@ -562,21 +634,53 @@ contains
     u(:) = exp(logx(:) - logx_max)
 
     usum  = sum(u(:))
-    qusum = sum(zai(:)*u(:))
 
     ! residuals
     f1 = logx_max + log(usum)
-    f2 = logx_max + log(qusum) - log(ye)
     
     ! Jacobian
     df1dn = sum(n(:)*u(:)) / usum
     df1dp = sum(z(:)*u(:)) / usum
     
-    df2dn = sum(n(:)*zai(:)*u(:)) / qusum
-    df2dp = sum(z(:)*zai(:)*u(:)) / qusum
+    logq_max = maxval(logx(:), mask=zai(:) > 0d0)
+    
+    uq(:) = 0d0
+    where (zai(:) > 0d0)
+       uq(:) = zai(:)*exp(logx(:) - logq_max)
+    end where
+    qsum = sum(uq(:))
 
+    f2 = logq_max + log(qsum) - log(ye)
 
+    df2dn = sum(n(:)*uq(:))/qsum
+    df2dp = sum(z(:)*uq(:))/qsum
+    
     det = df1dn*df2dp - df1dp*df2dn
+
+    jnorm1 = max(abs(df1dn) + abs(df2dn), abs(df1dp) + abs(df2dp))
+    
+    adjnorm1 = max(abs(df2dp) + abs(df2dn), abs(df1dp) + abs(df1dn))
+    
+    if (jnorm1 > 0d0 .and. adjnorm1 > 0d0) then
+       rcond = abs(det)/(jnorm1*adjnorm1)
+    else
+       rcond = 0d0
+    endif
+
+    if (rcond < rcond_min) then
+       ! jac_bad = .true.
+       dxn = 0d0
+       dxp = 0d0
+       if(present(rcond_out)) rcond_out = rcond
+       return
+    endif
+
+    ! if (.not. ieee_is_finite(det) .or. &
+    !      .not. ieee_is_finite(rcond)) then
+    !    jac_bad = .true.
+    !    return
+    ! endif
+
     
     dxn = (-f1*df2dp + df1dp*f2)/det
     dxp = ( df2dn*f1 - df1dn*f2)/det
