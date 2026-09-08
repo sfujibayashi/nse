@@ -4,8 +4,10 @@ module module_nse
   private
   public :: nse_init_four,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic, two_nuclei_approx, calc_ptf_HS
 
+  public :: output_nse_full
+
   integer :: n_spec
-  real(8),allocatable :: mexc(:), a(:), z(:), n(:), g(:), zai(:)
+  real(8),allocatable :: mexc(:), a(:), z(:), n(:), zai(:), g0(:)
   character(5),allocatable :: name_nucl(:)
   
   logical :: use_reaclib
@@ -14,6 +16,9 @@ module module_nse
   integer,allocatable :: irauscher(:) 
 
   logical :: use_rauscher_ptf = .true.  
+
+  real(8) :: n0_fm = 0.16d0
+
 contains
   
   subroutine nse_init_four(n_spec_out)
@@ -24,15 +29,15 @@ contains
     use_reaclib = .false.
 
     n_spec = 4
-    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
+    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g0(n_spec),zai(n_spec))
     ! n
-    a(1) = 1d0; z(1) = 0d0; n(1) = 1d0; g(1) = 2d0; mexc(1) = mnmev-a(1)*mumev
+    a(1) = 1d0; z(1) = 0d0; n(1) = 1d0; g0(1) = 2d0; mexc(1) = mnmev-a(1)*mumev
     ! p
-    a(2) = 1d0; z(2) = 1d0; n(2) = 0d0; g(2) = 2d0; mexc(2) = mpmev-a(2)*mumev
+    a(2) = 1d0; z(2) = 1d0; n(2) = 0d0; g0(2) = 2d0; mexc(2) = mpmev-a(2)*mumev
     ! alpha
-    a(3) = 4d0; z(3) = 2d0; n(3) = 2d0; g(3) = 1d0; mexc(3) = mamev-a(3)*mumev
+    a(3) = 4d0; z(3) = 2d0; n(3) = 2d0; g0(3) = 1d0; mexc(3) = mamev-a(3)*mumev
     ! 56Ni
-    a(4) =56d0; z(4) =28d0; n(4) =28d0; g(4) = 1d0; mexc(4) = mexc_56ni_mev-z(4)*memev
+    a(4) =56d0; z(4) =28d0; n(4) =28d0; g0(4) = 1d0; mexc(4) = mexc_56ni_mev-z(4)*memev
 
     zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
     
@@ -107,7 +112,7 @@ contains
 
     allocate(name_nucl(n_spec))
     allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), &
-         g(n_spec), zai(n_spec))
+         g0(n_spec), zai(n_spec))
 
     ! ---------------------------------------------------------
     ! Construct NSE species arrays
@@ -321,19 +326,52 @@ contains
 
   end subroutine calc_ptf_nse
 
+  subroutine calc_coulomb_HS(rho, ye, n0_fm, fcoul)
 
-  ! coulomb correction in Hempel+2010 Eq.(6)
-  function Ecoul_HS10_eq6(z, a, n0, ne) result(ecoul)
-    use const, only : pi, fine
-    real(8),intent(in) :: z,a,n0,ne
-    real(8) :: ecoul
-    real(8) :: x,r
+    use const, only : mu, pi, fine, hbar, clight, mev2erg
 
-    x = (ne/n0 * a/z)**(1d0/3d0)
-    r = ((3d0*a)/(4d0*pi*n0))**(1d0/3d0)
-    ecoul = -3d0/5d0 * z*z*fine/r*(3d0/2d0*x - 1d0/2d0*x*x*x) 
+    real(8),intent(in)  :: rho, ye, n0_fm
+    real(8),intent(out) :: fcoul(n_spec)
+
+    real(8) :: ne, n0, r, x
+    integer :: k
+
+    ! fm^-3 -> cm^-3
+    n0 = n0_fm * 1d39
+
+    ne = ye*rho/mu
+
+    fcoul(:) = 0d0
+
+    do k=1,n_spec
+
+       ! no Coulomb correction for free proton
+       ! if (a(k) <= 1d0 .or. z(k) <= 0d0) cycle
+       if (z(k) <= 0d0) cycle
+       
+       r = (3d0*a(k)/(4d0*pi*n0))**(1d0/3d0)
+       
+       x = (ne/n0 * a(k)/z(k))**(1d0/3d0)
+       
+       fcoul(k) = -3d0/5d0 * z(k)**2 * fine*hbar*clight/r &
+            * (1.5d0*x - 0.5d0*x**3) / mev2erg
+       
+    enddo
     
-  end function Ecoul_HS10_eq6
+  end subroutine calc_coulomb_HS
+
+  ! ! coulomb correction in Hempel+2010 Eq.(6)
+  ! function Ecoul_HS10_eq6(z, a, n0, ne) result(ecoul)
+  !   use const, only : pi, fine
+  !   real(8),intent(in) :: z,a,n0,ne
+  !   real(8) :: ecoul
+  !   real(8) :: x,r
+
+  !   x = (ne/n0 * a/z)**(1d0/3d0)
+  !   r = ((3d0*a)/(4d0*pi*n0))**(1d0/3d0)
+  !   ecoul = -3d0/5d0 * z*z*fine*hbar*clight/r*(3d0/2d0*x - 1d0/2d0*x*x*x) 
+    
+  ! end function Ecoul_HS10_eq6
 
   ! partition function used in HS-type EOS (Fai-Randrup)
   subroutine calc_ptf_HS(t9,g)
@@ -437,7 +475,7 @@ contains
     real(8),intent(out),optional :: xn_out,xp_out
     
     real(8) :: logrho0
-    real(8) :: logge(n_spec), logx(n_spec), x(n_spec), fcoul(n_spec)
+    real(8) :: logge(n_spec), logx(n_spec), x(n_spec), fcoul(n_spec), g(n_spec)
     
     real(8) :: xp,xn
 
@@ -458,10 +496,14 @@ contains
     
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(use_reaclib) call calc_ptf_nse(t9,g)
+    if(use_reaclib)then
+       call calc_ptf_nse(t9,g)
+    else
+       g(:) = g0(:)
+    endif
     
     if(use_reaclib)then
-       call calc_coulomb(rho,ye,fcoul)
+       call calc_coulomb_HS(rho, ye, n0_fm, fcoul)
     else
        fcoul(:) = 0d0
     endif
@@ -480,7 +522,7 @@ contains
          real(8) :: z1,z2,a1,a2,x1,x2,g1,g2,mex1,mex2,n1,n2
 
          if(ye/=0.5d0)then
-            call two_nuclei_approx_index(ye, k1, k2)
+            call two_nuclei_approx_index(ye, fcoul, k1, k2)
          else
             k1 = jnuc_reaclib(1,1)
             k2 = jnuc_reaclib(56,26)
@@ -625,53 +667,22 @@ contains
 
   end subroutine calc_nse
 
-  subroutine two_nuclei_approx(ye,xnse)
-    real(8),intent(in) :: ye
+  subroutine two_nuclei_approx(rho,ye,xnse)
+    real(8),intent(in) :: rho,ye
     real(8),intent(out) :: xnse(n_spec)
     
     real(8) :: y1,y2, z1,z2,a1,a2
     integer :: k1,k2
 
-    call two_nuclei_approx_index(ye, k1, k2)
+    real(8) :: fcoul(n_spec)
     
-    ! real(8) :: y1,y2, z1,z2,a1,a2, mexc1, mexc2, f, f_min
+    if(use_reaclib)then
+       call calc_coulomb_HS(rho, ye, n0_fm, fcoul)
+    else
+       fcoul(:) = 0d0
+    endif
 
-
-    ! integer :: k1_min, k2_min
-
-    ! k1_min = 0
-    ! k2_min = 0
-    ! f_min = 1d99
-    ! do k1=1,n_spec
-    !    do k2=1,k1-1
-    !       z1 = z(k1)
-    !       z2 = z(k2)
-    !       a1 = a(k1)
-    !       a2 = a(k2)
-    !       if( (z1/a1 - ye)*(z1/a1 - z2/a2) > 0d0 )then
-    !          y2 = (z1/a1 - ye)/(z1/a1 - z2/a2)/a2
-    !          y1 = (1d0 - a2*y2)/a1
-             
-    !          mexc1 = mexc(k1)
-    !          mexc2 = mexc(k2)
-             
-    !          f = mexc1*y1 + mexc2*y2
-
-    !          !write(6,*) k1,k2,y1,y2,f
-    !          if(y1>0d0 .and. f < f_min)then
-    !             f_min = f
-    !             k1_min = k1
-    !             k2_min = k2
-                
-    !             !write(6,'(2i5,99es12.4)') k1_min,k2_min,f_min,mexc1,mexc2, y1,y2
-    !             !stop
-    !          endif
-    !       endif
-    !    enddo
-    ! enddo
-    
-    ! k1 = k1_min
-    ! k2 = k2_min
+    call two_nuclei_approx_index(ye, fcoul, k1, k2)
 
     z1 = z(k1)
     z2 = z(k2)
@@ -687,8 +698,8 @@ contains
   end subroutine two_nuclei_approx
 
 
-  subroutine two_nuclei_approx_index(ye,k1_min,k2_min)
-    real(8),intent(in) :: ye
+  subroutine two_nuclei_approx_index(ye,fcoul,k1_min,k2_min)
+    real(8),intent(in) :: ye, fcoul(n_spec)
     integer,intent(out) :: k1_min,k2_min
     real(8) :: y1,y2, z1,z2,a1,a2, mexc1, mexc2, f, f_min
 
@@ -710,7 +721,7 @@ contains
              mexc1 = mexc(k1)
              mexc2 = mexc(k2)
              
-             f = mexc1*y1 + mexc2*y2
+             f = (mexc1+fcoul(k1))*y1 + (mexc2+fcoul(k2))*y2
 
              !write(6,*) k1,k2,y1,y2,f
              if(y1>0d0 .and. f < f_min)then
@@ -751,6 +762,7 @@ contains
     ! real(8) :: xm,dxm,xm_min,xm_max
     logical :: nsefail
     real(8) :: t9
+    real(8) :: g(n_spec)
 
     call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out)
     !write(6,*) xnse(:)
@@ -1136,5 +1148,23 @@ contains
 
   end subroutine output_composition
   
+  subroutine output_nse_full(rho,temp,ye,xnse, output_filename)
+    real(8),intent(in) :: rho,temp,ye
+    real(8),intent(in) :: xnse(n_spec)
+    character(*),intent(in) :: output_filename
+    integer :: unit
+    integer :: i
+    real(8) :: g(n_spec)
+    real(8) :: t9
+    
+    t9 = temp/1d9
+    call calc_ptf_nse(t9,g)
+    open(newunit=unit, file=output_filename, status="replace", action="write")
+    write(unit, '("#",99a20)') "index", "name", "A", "Z", "N", "Xi", "Yi", "gi"
+    do i=1,n_spec
+       write(unit, '(" ",i20,a20,3i20,3es20.10e3)') i, name_nucl(i), nint(a(i)), nint(z(i)), nint(n(i)), xnse(i), xnse(i)/a(i), g(i)
+    end do
+    close(unit)
+  end subroutine output_nse_full
 
 end module module_nse
