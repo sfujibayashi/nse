@@ -31,6 +31,7 @@ module module_nse
     real(8) :: y_n
     real(8) :: abar
     real(8) :: mexc
+    real(8) :: ecoul
  end type stat_t
 
  public :: stat_t
@@ -1092,14 +1093,14 @@ contains
   end subroutine statistic
 
 
-  subroutine statistic_compose(x, stat)
+  subroutine statistic_compose(rho, x, stat)
     use const, only:emev
-    real(8),intent(in) :: x(n_spec)
+    real(8),intent(in) :: rho, x(n_spec)
     type(stat_t),intent(out) :: stat
 
     integer :: k
 
-    real(8) :: ytot, mexc_ave, yesum
+    real(8) :: ytot, mexc_ave, yesum, ecoul_ave
     real(8) :: z_heavy, a_heavy, y_heavy
 
     yesum = 0.d0
@@ -1152,6 +1153,9 @@ contains
     stat%z_n = z_heavy
     stat%y_n = y_heavy
 
+    call calc_coulomb_average(rho, yesum, x, ecoul_ave)
+    
+    stat%ecoul = ecoul_ave
   end subroutine statistic_compose
 
 
@@ -1247,5 +1251,19 @@ contains
     end do
     close(unit)
   end subroutine output_nse_full
+  
+  subroutine calc_coulomb_average(rho, ye, x, ecoul_ave)
+    
+    real(8),intent(in)  :: rho, ye
+    real(8),intent(in)  :: x(n_spec)
+    real(8),intent(out) :: ecoul_ave
+    
+    real(8) :: fcoul(n_spec)
+    
+    call calc_coulomb_HS(rho, ye, n0_fm, fcoul)
+    
+    ecoul_ave = sum(x(:)/a(:) * fcoul(:))
+    
+  end subroutine calc_coulomb_average
 
 end module module_nse

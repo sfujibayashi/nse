@@ -24,8 +24,8 @@ program extraction
   type(stat_t) :: stat
   integer :: iyq_target, it_target
 
-  iyq_target = 39
-  it_target = 15
+  iyq_target = 45
+  it_target = 22
   
   use_TNAguess = .false.
 
@@ -77,7 +77,7 @@ program extraction
     open(newunit=unit_nse, file="nse.dat", status="replace", action="write")
     
     write(unit_com,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc(with H-EOS)"
-    write(unit_nse,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc"
+    write(unit_nse,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc", "Ecoul"
           
     ! read CompOSE h5 file
     open(newunit=unit, file=trim(fn_points), status="old", action="read")
@@ -123,10 +123,10 @@ program extraction
        mres_Comp = E_Comp_MeV - E_helm_MeV
        
        call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
-       call statistic_compose(xnse, stat)
+       call statistic_compose(rho, xnse, stat)
        write(unit_com,'(" ",99es20.11e3)') rho, temp, ye,  a_n, z_n, y_n, abar, yn, yp, yh2, yh3, yhe3, yhe4, E_Comp_MeV, mres_Comp
        
-       write(unit_nse,'(" ",99es20.11e3)') rho, temp, ye, stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4, E_helm_MeV, stat%mexc
+       write(unit_nse,'(" ",99es20.11e3)') rho, temp, ye, stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4, E_helm_MeV, stat%mexc, stat%ecoul
        
        write(6,*) inb,temp,rho,yq
 
