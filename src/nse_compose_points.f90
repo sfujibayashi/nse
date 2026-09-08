@@ -21,7 +21,11 @@ program nse_single
   character(256) :: fn_out, fn_points
 
   type(stat_t) :: stat
+  integer :: iyq_target, it_target
 
+  iyq_target = 20
+  it_target = 10
+  
   use_TNAguess = .false.
 
   block
@@ -58,7 +62,15 @@ program nse_single
     real(8) :: a_n, z_n, y_n, abar
     real(8) :: yn, yp, yh2, yh3, yhe3, yhe4
     real(8) :: q7
+
+    integer :: unit_com, unit_nse
+
+    open(newunit=unit_com, file="compose.dat", status="replace", action="write")
+    open(newunit=unit_nse, file="nse.dat", status="replace", action="write")
     
+    write(unit_com,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4"
+    write(unit_nse,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4"
+          
     ! read CompOSE h5 file
     open(newunit=unit, file=trim(fn_points), status="old", action="read")
 
@@ -86,6 +98,9 @@ program nse_single
           stop
        endif
 
+       if (iyq /= iyq_target) cycle
+       if (it  /= it_target)  cycle
+       
        npoint = npoint + 1
 
        if (npoint == 1) then
@@ -93,25 +108,22 @@ program nse_single
           write(*,'(a,3i6)')       "index       = ", inb, iyq, it
           write(*,'(a,3es16.7)')   "nb,T,Yq     = ", nb, temp_mev, yq
           write(*,'(a,2es16.7)')   "rho,T[K]    = ", rho, temp
-          write(*,'(a,4es16.7)')   "A_N,Z_N,Y_N,Abar = ", &
+          write(*,'(a,4es20.11)')   "A_N,Z_N,Y_N,Abar = ", &
                a_n, z_n, y_n, abar
-          write(*,'(a,6es16.7)')   "Yn,Yp,Yd,Yt,YHe3,YHe4 = ", &
+          write(*,'(a,6es20.11)')   "Yn,Yp,Yd,Yt,YHe3,YHe4 = ", &
                yn, yp, yh2, yh3, yhe3, yhe4
-          write(*,'(a,es16.7)')    "Q7          = ", q7
+          write(*,'(a,es20.11)')    "Q7          = ", q7
        endif
 
-
-       if (npoint == 1) then
-          ye = yq
-          call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
-          call statistic_compose(xnse, stat)
-          write(*,'(a,3es16.7)')   "rho,T[K],Ye  = ", rho, temp, ye
-          write(*,'(a,4es16.7)')   "A_N,Z_N,Y_N,Abar = ", &
-               stat%a_n, stat%z_n, stat%y_n, stat%abar
-          write(*,'(a,6es16.7)')   "Yn,Yp,Yd,Yt,YHe3,YHe4 = ", &
-               stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4
-          stop
-       endif
+       
+       ye = yq
+       call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
+       call statistic_compose(xnse, stat)
+       write(unit_com,'(" ",99es20.11)') rho, temp, ye,  a_n, z_n, y_n, abar, yn, yp, yh2, yh3, yhe3, yhe4
+       
+       write(unit_nse,'(" ",99es20.11)') rho, temp, ye, stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4
+       
+       write(6,*) inb,temp,rho,yq
     enddo
 
     close(unit)
