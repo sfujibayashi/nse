@@ -114,7 +114,7 @@ program make_nse_table
 
            if(nsefail) then
               ! call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,itr_out = itr_out, err_out = err_out)
-              call two_nuclei_approx(ye,xnse)
+              call two_nuclei_approx(rho,ye,xnse)
            endif
 
            call statistic(xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
