@@ -17,7 +17,7 @@ module module_nse
 
   logical :: use_rauscher_ptf = .true.  
 
-  real(8) :: n0_fm = 0.16d0
+  real(8) :: n0_fm = 0.147d0
 
   type :: stat_t
     real(8) :: yn
@@ -30,6 +30,7 @@ module module_nse
     real(8) :: z_n
     real(8) :: y_n
     real(8) :: abar
+    real(8) :: mexc
  end type stat_t
 
  public :: stat_t
@@ -315,6 +316,9 @@ contains
     integer :: i, ir, iw
     real(8) :: pf
 
+    !call calc_ptf_HS(t9,g)
+    !return
+    
     do i=1,n_spec
 
        iw = ireaclib(i)
@@ -1089,13 +1093,28 @@ contains
 
 
   subroutine statistic_compose(x, stat)
+    use const, only:emev
     real(8),intent(in) :: x(n_spec)
     type(stat_t),intent(out) :: stat
 
     integer :: k
 
-    real(8) :: ytot
+    real(8) :: ytot, mexc_ave, yesum
     real(8) :: z_heavy, a_heavy, y_heavy
+
+    yesum = 0.d0
+    do k=1,n_spec
+       yesum = yesum + x(k)/a(k)*z(k)
+    enddo
+
+    ! mass-excess per baryon
+    ! add m_e*c^2 * Ye to account for the rest-mass of balence electrons.
+    mexc_ave = 0.d0
+    do k=1,n_spec
+       mexc_ave = mexc_ave + mexc(k)*x(k)/a(k)
+    enddo
+    mexc_ave = mexc_ave + emev*yesum
+    stat%mexc = mexc_ave
 
     ytot = 0.d0
     do k=1,n_spec
