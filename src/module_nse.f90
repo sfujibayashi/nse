@@ -2,7 +2,7 @@ module module_nse
   implicit none
 
   private
-  public :: nse_init_four,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic, two_nuclei_approx, calc_ptf_HS
+  public :: nse_init_four,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic,statistic_compose, two_nuclei_approx, calc_ptf_HS
 
   public :: output_nse_full
 
@@ -19,6 +19,20 @@ module module_nse
 
   real(8) :: n0_fm = 0.16d0
 
+  type :: stat_t
+    real(8) :: yn
+    real(8) :: yp
+    real(8) :: yh2
+    real(8) :: yh3
+    real(8) :: yhe3
+    real(8) :: yhe4
+    real(8) :: a_n
+    real(8) :: z_n
+    real(8) :: y_n
+    real(8) :: abar
+ end type stat_t
+
+ public :: stat_t
 contains
   
   subroutine nse_init_four(n_spec_out)
@@ -346,8 +360,7 @@ contains
     do k=1,n_spec
 
        ! no Coulomb correction for free proton
-       ! if (a(k) <= 1d0 .or. z(k) <= 0d0) cycle
-       if (z(k) <= 0d0) cycle
+       if (a(k) <= 1d0 .or. z(k) <= 0d0) cycle
        
        r = (3d0*a(k)/(4d0*pi*n0))**(1d0/3d0)
        
@@ -1073,6 +1086,55 @@ contains
     a_heavy = a_heavy / y_heavy
 
   end subroutine statistic
+
+
+  subroutine statistic_compose(x, stat)
+    real(8),intent(in) :: x(n_spec)
+    type(stat_t),intent(out) :: stat
+
+    integer :: k
+
+    real(8) :: ytot
+    real(8) :: z_heavy, a_heavy, y_heavy
+
+    ytot = 0.d0
+    do k=1,n_spec
+       ytot = ytot + x(k)/a(k)
+    enddo
+    stat%abar = 1d0/ytot
+    
+    z_heavy = 0.d0
+    a_heavy = 0.d0
+    y_heavy = 0.d0
+    do k=1,n_spec
+       ! write(6,*) k, name_nucl(k), x(k), nint(a(k)), nint(z(k))
+       if    (nint(a(k))==1.and.nint(z(k))==0)then ! n
+          stat%yn = x(k)/a(k)
+       elseif(nint(a(k))==1.and.nint(z(k))==1)then ! p
+          stat%yp = x(k)/a(k)
+       elseif(nint(a(k))==2.and.nint(z(k))==1)then ! h2
+          stat%yh2 = x(k)/a(k)
+       elseif(nint(a(k))==3.and.nint(z(k))==1)then ! h3
+          stat%yh3 = x(k)/a(k)
+       elseif(nint(a(k))==3.and.nint(z(k))==2)then ! he3
+          stat%yhe3 = x(k)/a(k)
+       elseif(nint(a(k))==4.and.nint(z(k))==2)then ! he4
+          stat%yhe4 = x(k)/a(k)
+       else
+          z_heavy = z_heavy + z(k)*x(k)/a(k)
+          a_heavy = a_heavy + a(k)*x(k)/a(k)
+          y_heavy = y_heavy +      x(k)/a(k)
+       endif
+    enddo
+    z_heavy = z_heavy / y_heavy
+    a_heavy = a_heavy / y_heavy
+
+    stat%a_n = a_heavy
+    stat%z_n = z_heavy
+    stat%y_n = y_heavy
+
+  end subroutine statistic_compose
+
 
   subroutine output_composition(x,temp,rho,ye)
     use module_ptf_reaclib

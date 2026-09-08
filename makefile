@@ -15,7 +15,11 @@ FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=i
 .SUFFIXES: .f90 .F90 .o
 
 MOD :=  module_ptf_reaclib.f90 module_ptf_rauscher.f90 const_mod.f90 module_nse.f90
-SRC :=  locate.f90 polint.f90 make_nse_table.f90 index_rank.f90
+SRC :=  locate.f90 polint.f90 index_rank.f90
+# SRC += nse_single.f90
+# SRC += make_nse_table.f90
+SRC += nse_compose_points.f90
+
 
 SRC_DIR := src/
 
