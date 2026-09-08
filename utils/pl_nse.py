@@ -1,3 +1,8 @@
+#-------------------------
+#
+# Plotter of Abar from the output of make_nse_table
+#
+#-------------------------
 import numpy as np
 #import h5py
 import sys
