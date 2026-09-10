@@ -8,7 +8,7 @@ program nse_single
   integer,parameter :: itrlim = 300
   real(8),parameter :: tol = 1d-10
 
-  integer :: n_spec
+  type(nse_network_t) :: net
   real(8),allocatable :: xnse(:)
 
   logical :: nsefail, use_TNAguess
@@ -40,21 +40,21 @@ program nse_single
     
     call init_ptf_reaclib(fn_winv)
     call init_ptf_rauscher(fn_raucher)
-    call nse_init_reaclib(n_spec, use_rauscher_ptf)
+    call nse_init_reaclib(net, use_rauscher_ptf)
 
   end block
 
-  allocate(xnse(n_spec))
+  allocate(xnse(net%n_spec))
 
-  call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
+  call calc_nse(net,rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
   
-  call statistic(xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
+  call statistic(net, xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
   x_heavy = a_heavy*y_heavy
-  call index_rank(n_rank, n_spec, xnse, index_r, 1d0)
+  call index_rank(n_rank, net%n_spec, xnse, index_r, 1d0)
   
   write(6,'(a, 11es16.7e3)') "rho, T, Ye = ", rho,temp,ye
-  write(6,'(10a16,10es16.7e3)') (name_reaclib(ireaclib(index_r(i))),i=1,n_rank), (xnse(index_r(i)),i=1,n_rank)
+  write(6,'(10a16,10es16.7e3)') (net%name_nucl(index_r(i)),i=1,n_rank), (xnse(index_r(i)),i=1,n_rank)
 
-  call output_nse_full(rho,temp,ye,xnse, fn_out)
+  call output_nse_full(net, rho, temp, ye, xnse, fn_out)
   
 end program nse_single
