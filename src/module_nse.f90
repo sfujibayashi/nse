@@ -37,6 +37,30 @@ module module_nse
  end type stat_t
 
  public :: stat_t
+ 
+ type :: nse_network_t
+    integer :: n_spec = 0
+    
+    real(8), allocatable :: mexc(:)
+    real(8), allocatable :: a(:)
+    real(8), allocatable :: z(:)
+    real(8), allocatable :: n(:)
+    real(8), allocatable :: zai(:)
+    real(8), allocatable :: g0(:)
+    
+    character(5), allocatable :: name_nucl(:)
+    
+    integer, allocatable :: ireaclib(:)
+    integer, allocatable :: irauscher(:)
+    
+    logical :: use_reaclib = .false.
+    logical :: use_rauscher_ptf = .true.
+    
+    real(8) :: n0_fm = 0.1583d0
+ end type nse_network_t
+
+  public :: nse_network_t
+
 contains
   
   subroutine nse_init_four(n_spec_out)
@@ -68,7 +92,7 @@ contains
     use module_ptf_reaclib
     use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
     use const, only: memev
-
+    
     integer,intent(out) :: n_spec_out
     logical,intent(in) :: use_rauscher_ptf_in
 
