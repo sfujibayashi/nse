@@ -8,18 +8,18 @@ module module_nse
   public :: fcoulomb_HS
 
   !integer :: n_spec
-  real(8),allocatable :: mexc(:), a(:), z(:), n(:), zai(:), g0(:)
-  character(5),allocatable :: name_nucl(:)
+  !real(8),allocatable :: mexc(:), a(:), z(:), n(:), zai(:), g0(:)
+  !character(5),allocatable :: name_nucl(:)
   
-  logical :: use_reaclib
+  !logical :: use_reaclib
 
-  integer,allocatable,public :: ireaclib(:)
-  integer,allocatable :: irauscher(:) 
+  !integer,allocatable,public :: ireaclib(:)
+  !integer,allocatable :: irauscher(:) 
 
-  logical :: use_rauscher_ptf = .true.  
+  !logical :: use_rauscher_ptf = .true.  
 
   ! real(8), public :: n0_fm = 0.1491d0
-  real(8), public :: n0_fm = 0.1583d0
+  !real(8), public :: n0_fm = 0.1583d0
   
   type :: stat_t
     real(8) :: yn
@@ -566,13 +566,13 @@ contains
     
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(use_reaclib)then
+    if(net%use_reaclib)then
        call calc_ptf_nse(net, t9,g)
     else
-       g(:) = g0(:)
+       g(:) = net%g0(:)
     endif
     
-    if(use_reaclib)then
+    if(net%use_reaclib)then
        call calc_coulomb_HS(net, rho, ye, fcoul)
     else
        fcoul(:) = 0d0
@@ -613,9 +613,9 @@ contains
          mex2 = net%mexc(k2)*mev2erg
          
          ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT
-         eta01ex = -logrho0 + log(x1) - log(g1) - 2.5d0*log(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp)
+         eta01ex = -logrho0 + log(x1) - log(g1) - 2.5d0*log(a1) + (net%mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp)
          ! (mu_2 - m_2 c^2 + mexc_2*c^2)/kT
-         eta02ex = -logrho0 + log(x2) - log(g2) - 2.5d0*log(a2) + (mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp)
+         eta02ex = -logrho0 + log(x2) - log(g2) - 2.5d0*log(a2) + (net%mexc(k2) + fcoul(k2))*mev2erg/(kerg*temp)
          
          xn = (z2*eta01ex - z1*eta02ex)/(n1*z2-n2*z1)
          xp = (n2*eta01ex - n1*eta02ex)/(n2*z1-n1*z2)
@@ -724,7 +724,7 @@ contains
        endif
     enddo
 
-    logx(:) = logge(:) + z(:)*xp + n(:)*xn
+    logx(:) = logge(:) + net%z(:)*xp + net%n(:)*xn
 
     block
       real(8) :: logx_max, u(net%n_spec)
@@ -850,15 +850,15 @@ contains
 
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(use_reaclib)call calc_ptf_nse(net,t9,g)
+    if(net%use_reaclib)call calc_ptf_nse(net,t9,g)
 
-    if(use_reaclib)then
+    if(net%use_reaclib)then
        call calc_coulomb(net,rho,ye,fcoul)
     else
        fcoul(:) = 0d0
     endif
     !
-    logge(:) = log(g(:)) + 2.5d0*log(a(:)) + logrho0 - mexc(:)*mev2erg/(kerg*temp) &
+    logge(:) = log(g(:)) + 2.5d0*log(net%a(:)) + logrho0 - net%mexc(:)*mev2erg/(kerg*temp) &
          - fcoul(:)*mev2erg/(kerg*temp)
 
     nn=100
@@ -1115,7 +1115,7 @@ contains
 
     mexc_ave = 0.d0
     do k=1,net%n_spec
-       mexc_ave = mexc_ave + mexc(k)*x(k)/net%a(k)
+       mexc_ave = mexc_ave + net%mexc(k)*x(k)/net%a(k)
     enddo
 
     ytot = 0.d0

@@ -129,7 +129,7 @@ program extraction
 
        E_helm_MeV = eps_helm * mu / mev2erg
        mres_Comp = E_Comp_MeV - E_helm_MeV
-       Fcoul_Comp = y_n*fcoulomb_HS(rho, ye, z_n, a_n, n0_fm)
+       Fcoul_Comp = y_n*fcoulomb_HS(rho, ye, z_n, a_n, net%n0_fm)
        
        call calc_nse(net,rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
        call statistic_compose(net, rho, xnse, stat)
