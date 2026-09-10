@@ -23,8 +23,8 @@ program nse_single
   type(stat_t) :: stat
   integer :: iyq_target, it_target
 
-  iyq_target = 20
-  it_target = 10
+  iyq_target = 54
+  it_target = 22
   
   use_TNAguess = .false.
 
@@ -100,6 +100,7 @@ program nse_single
 
        if (iyq /= iyq_target) cycle
        if (it  /= it_target)  cycle
+       !if (rho > 1d14)cycle
        
        npoint = npoint + 1
 
@@ -119,11 +120,12 @@ program nse_single
        ye = yq
        call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
        call statistic_compose(xnse, stat)
-       write(unit_com,'(" ",99es20.11)') rho, temp, ye,  a_n, z_n, y_n, abar, yn, yp, yh2, yh3, yhe3, yhe4
+       write(unit_com,'(" ",99es20.11e3)') rho, temp, ye,  a_n, z_n, y_n, abar, yn, yp, yh2, yh3, yhe3, yhe4
        
-       write(unit_nse,'(" ",99es20.11)') rho, temp, ye, stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4
+       write(unit_nse,'(" ",99es20.11e3)') rho, temp, ye, stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4
        
        write(6,*) inb,temp,rho,yq
+
     enddo
 
     close(unit)

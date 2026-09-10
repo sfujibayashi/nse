@@ -24,8 +24,10 @@ program extraction
   type(stat_t) :: stat
   integer :: iyq_target, it_target
 
-  iyq_target = 45
-  it_target = 22
+  real(8) :: eps, pres, cs2, entr
+
+  iyq_target = 19
+  it_target = 15
   
   use_TNAguess = .false.
 
@@ -71,14 +73,14 @@ program extraction
     integer :: unit_com, unit_nse
 
     real(8) :: eps_helm, pres_helm, cs2_helm, entr_helm, E_helm_MeV
-    real(8) :: mres_Comp
+    real(8) :: mres_Comp, Fcoul_Comp
 
     open(newunit=unit_com, file="compose.dat", status="replace", action="write")
     open(newunit=unit_nse, file="nse.dat", status="replace", action="write")
     
-    write(unit_com,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc(with H-EOS)"
-    write(unit_nse,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc", "Ecoul"
-          
+    write(unit_com,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc/b(with helm)", "Ecoul/b"
+    write(unit_nse,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc/b", "Ecoul/b", "s/k"
+    
     ! read CompOSE h5 file
     open(newunit=unit, file=trim(fn_points), status="old", action="read")
 
@@ -108,9 +110,14 @@ program extraction
           stop
        endif
 
-       if (iyq /= iyq_target) cycle
-       if (it  /= it_target)  cycle
+       if (mod(iyq-1,4)>0) cycle
+       if (mod(inb-1,5)>0) cycle
+       if (mod(it-1,1)>0) cycle
+       !if (iyq /= iyq_target) cycle
+       !if (it  /= it_target)  cycle
        !if (rho > 1d14)cycle
+       if(temp < 4d9 .or. 1d10 < temp)cycle
+       if(1d12 < rho)cycle
 
        npoint = npoint + 1
        
@@ -121,12 +128,16 @@ program extraction
 
        E_helm_MeV = eps_helm * mu / mev2erg
        mres_Comp = E_Comp_MeV - E_helm_MeV
+       Fcoul_Comp = y_n*fcoulomb_HS(rho, ye, z_n, a_n, n0_fm)
        
        call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
        call statistic_compose(rho, xnse, stat)
-       write(unit_com,'(" ",99es20.11e3)') rho, temp, ye,  a_n, z_n, y_n, abar, yn, yp, yh2, yh3, yhe3, yhe4, E_Comp_MeV, mres_Comp
+       write(unit_com,'(" ",99es20.11e3)') rho, temp, ye,  a_n, z_n, y_n, abar, yn, yp, yh2, yh3, yhe3, yhe4, E_Comp_MeV, mres_Comp, Fcoul_Comp
        
-       write(unit_nse,'(" ",99es20.11e3)') rho, temp, ye, stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4, E_helm_MeV, stat%mexc, stat%ecoul
+       call eos_all(rho, temp, ye, 1d0/stat%abar, stat%mexc, &
+            eps, pres, cs2, entr)
+            
+       write(unit_nse,'(" ",99es20.11e3)') rho, temp, ye, stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4, E_helm_MeV, stat%mexc, stat%ecoul, entr
        
        write(6,*) inb,temp,rho,yq
 
