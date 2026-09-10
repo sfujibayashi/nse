@@ -63,27 +63,25 @@ module module_nse
 
 contains
   
-  subroutine nse_init_four(n_spec_out)
+  subroutine nse_init_four(net)
     use const,only:mnmev,mpmev,mamev,mumev,memev
-    integer, intent(out) :: n_spec_out
+    type(nse_network_t), intent(out) :: net
     real(8),parameter :: mexc_56ni_mev = -53.907539d0
 
     use_reaclib = .false.
 
-    n_spec = 4
-    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g0(n_spec),zai(n_spec))
+    net%n_spec = 4
+    allocate(net%mexc(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), net%g0(net%n_spec), net%zai(net%n_spec))
     ! n
-    a(1) = 1d0; z(1) = 0d0; n(1) = 1d0; g0(1) = 2d0; mexc(1) = mnmev-a(1)*mumev
+    net%a(1) = 1d0; net%z(1) = 0d0; net%n(1) = 1d0; net%g0(1) = 2d0; net%mexc(1) = mnmev-net%a(1)*mumev
     ! p
-    a(2) = 1d0; z(2) = 1d0; n(2) = 0d0; g0(2) = 2d0; mexc(2) = mpmev-a(2)*mumev
+    net%a(2) = 1d0; net%z(2) = 1d0; net%n(2) = 0d0; net%g0(2) = 2d0; net%mexc(2) = mpmev-net%a(2)*mumev
     ! alpha
-    a(3) = 4d0; z(3) = 2d0; n(3) = 2d0; g0(3) = 1d0; mexc(3) = mamev-a(3)*mumev
+    net%a(3) = 4d0; net%z(3) = 2d0; net%n(3) = 2d0; net%g0(3) = 1d0; net%mexc(3) = mamev-net%a(3)*mumev
     ! 56Ni
-    a(4) =56d0; z(4) =28d0; n(4) =28d0; g0(4) = 1d0; mexc(4) = mexc_56ni_mev-z(4)*memev
+    net%a(4) =56d0; net%z(4) =28d0; net%n(4) =28d0; net%g0(4) = 1d0; net%mexc(4) = mexc_56ni_mev-net%z(4)*memev
 
-    zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
-    
-    n_spec_out = n_spec
+    zai(:) = net%z(:)/net%a(:)
     
   end subroutine nse_init_four
 
