@@ -68,7 +68,8 @@ contains
     type(nse_network_t), intent(out) :: net
     real(8),parameter :: mexc_56ni_mev = -53.907539d0
 
-    use_reaclib = .false.
+        
+    net%use_reaclib = .false.
 
     net%n_spec = 4
     allocate(net%mexc(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), net%g0(net%n_spec), net%zai(net%n_spec))
@@ -81,7 +82,7 @@ contains
     ! 56Ni
     net%a(4) =56d0; net%z(4) =28d0; net%n(4) =28d0; net%g0(4) = 1d0; net%mexc(4) = mexc_56ni_mev-net%z(4)*memev
 
-    zai(:) = net%z(:)/net%a(:)
+    net%zai(:) = net%z(:)/net%a(:)
     
   end subroutine nse_init_four
 
