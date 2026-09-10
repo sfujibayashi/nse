@@ -2,11 +2,12 @@ module module_nse
   implicit none
 
   private
-  public :: nse_init_four,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic,statistic_compose, two_nuclei_approx, calc_ptf_HS
+  public :: nse_init_four,nse_init_aprox21,nse_init_reaclib
+  public :: calc_nse,test_converge,output_composition,statistic,statistic_compose, two_nuclei_approx, calc_ptf_HS
 
   public :: output_nse_full
   public :: fcoulomb_HS
-
+  
   !integer :: n_spec
   !real(8),allocatable :: mexc(:), a(:), z(:), n(:), zai(:), g0(:)
   !character(5),allocatable :: name_nucl(:)
@@ -85,6 +86,68 @@ contains
     net%zai(:) = net%z(:)/net%a(:)
     
   end subroutine nse_init_four
+
+  subroutine nse_init_aprox21(net, use_rauscher_ptf_in)
+
+    use module_ptf_reaclib
+    use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
+    use const, only: memev
+
+    type(nse_network_t), intent(out) :: net
+    logical, intent(in) :: use_rauscher_ptf_in
+
+    integer, parameter :: ns = 20
+    integer, parameter :: aa(ns) = [ &
+         1, 1, 3, 4, 12, 14, 16, 20, 24, 28, &
+         32,36,40,44,48,56,52,54,56,56 ]
+    integer, parameter :: zz(ns) = [ &
+         0, 1, 2, 2,  6,  7,  8, 10, 12, 14, &
+         16,18,20,22,24,24,26,26,26,28 ]
+
+    integer :: i, j, iw, ir
+
+    net%n_spec = ns
+    net%use_reaclib = .true.
+    net%use_rauscher_ptf = use_rauscher_ptf_in
+
+    allocate(net%ireaclib(ns), net%irauscher(ns))
+    allocate(net%name_nucl(ns))
+    allocate(net%mexc(ns), net%a(ns), net%z(ns), net%n(ns), &
+         net%g0(ns), net%zai(ns))
+
+    do i = 1, ns
+
+       iw = jnuc_reaclib(aa(i), zz(i))
+
+       if (iw <= 0) then
+          write(*,*) "ERROR: aprox21 nucleus missing from WinVNE:", aa(i), zz(i)
+          stop
+       endif
+
+       ir = 0
+       do j = 1, nct_rauscher
+          if (z_rauscher(j) == zz(i) .and. &
+               a_rauscher(j) == aa(i)) then
+             ir = j
+             exit
+          endif
+       enddo
+
+       net%ireaclib(i)  = iw
+       net%irauscher(i) = ir
+
+       net%a(i) = ams_reaclib(iw)
+       net%z(i) = dble(npt_reaclib(iw))
+       net%n(i) = dble(nnt_reaclib(iw))
+
+       net%mexc(i) = exc_reaclib(iw) - net%z(i)*memev
+       net%name_nucl(i) = name_reaclib(iw)
+
+    enddo
+
+    net%zai(:) = net%z(:)/net%a(:)
+
+  end subroutine nse_init_aprox21
 
   subroutine nse_init_reaclib(net, use_rauscher_ptf_in)
 
@@ -528,6 +591,21 @@ contains
     
   ! end function excited_HS10
   
+  integer function find_nucleus(net, ia, iz) result(idx)
+    type(nse_network_t), intent(in) :: net
+    integer, intent(in) :: ia, iz
+    integer :: i
+    
+    idx = 0
+    do i = 1, net%n_spec
+       if (nint(net%a(i)) == ia .and. nint(net%z(i)) == iz) then
+          idx = i
+          return
+       endif
+    enddo
+  end function find_nucleus
+
+  
   subroutine calc_nse(net, rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
@@ -594,8 +672,14 @@ contains
          if(ye/=0.5d0)then
             call two_nuclei_approx_index(net, ye, fcoul, k1, k2)
          else
-            k1 = jnuc_reaclib(1,1)
-            k2 = jnuc_reaclib(56,26)
+            k1 = find_nucleus(net, 1, 1)
+            k2 = find_nucleus(net, 56, 26)
+            if (k1 == 0 .or. k2 == 0) then
+               write(*,*) "ERROR in calc_nse: required nucleus not found"
+               write(*,*) "p index    =", k1
+               write(*,*) "Fe56 index =", k2
+               error stop
+            endif
          endif
 
          z1 = net%z(k1)
