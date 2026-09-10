@@ -314,7 +314,7 @@ contains
     integer :: k
     real(8) :: ne, v_n, v_c, u
     
-    n0 = net%n0_fm*1d39
+    n0 = 0.16d0*1d39
     
     fcoul(:) = 0d0
     
