@@ -7,7 +7,7 @@ module module_nse
   public :: output_nse_full
   public :: fcoulomb_HS
 
-  integer :: n_spec
+  !integer :: n_spec
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), zai(:), g0(:)
   character(5),allocatable :: name_nucl(:)
   
@@ -304,25 +304,28 @@ contains
     
   ! end subroutine nse_init_reaclib
 
-  subroutine calc_coulomb(rho,ye,fcoul)
+  subroutine calc_coulomb(net,rho,ye,fcoul)
     use const, only : qe, mu, pi, mev2erg
-    real(8),intent(in) :: rho,ye
-    real(8),intent(out) :: fcoul(n_spec)
 
+    type(nse_network_t), intent(in) :: net
+    real(8),intent(in) :: rho,ye
+    real(8),intent(out) :: fcoul(net%n_spec)
+    real(8) :: n0
     integer :: k
     real(8) :: ne, v_n, v_c, u
-    real(8),parameter :: n0 = 0.16d0*1d39
+    
+    n0 = net%n0_fm*1d39
     
     fcoul(:) = 0d0
     
     ne = ye*rho/mu
-    do k=1,n_spec
-       if( z(k)>0.d0)then
-          v_n = a(k)/n0
-          v_c = z(k)/ne
+    do k=1,net%n_spec
+       if( net%z(k)>0.d0)then
+          v_n = net%a(k)/n0
+          v_c = net%z(k)/ne
           u   = v_n/v_c
           
-          fcoul(k) = (3d0/5d0)*(4d0*pi/3d0)**(-1d0/3d0) * qe**2 * n0**2 * (z(k)/a(k))**2 * (v_n)**(5d0/3d0) &
+          fcoul(k) = (3d0/5d0)*(4d0*pi/3d0)**(-1d0/3d0) * qe**2 * n0**2 * (net%z(k)/net%a(k))**2 * (v_n)**(5d0/3d0) &
                * (-3d0/2d0*u**(1d0/3d0) + 1d0/2d0*u) / mev2erg
        endif
     enddo
@@ -532,7 +535,7 @@ contains
     real(8),intent(in) :: rho,temp,ye
     integer,intent(in) :: itrlim
     real(8),intent(in) :: tol
-    real(8),intent(out) :: xnse(n_spec)
+    real(8),intent(out) :: xnse(net%n_spec)
     logical,intent(out) :: nsefail
     logical,intent(in) :: use_TNAguess
     real(8),intent(out),optional :: xn_history(0:itrlim),xp_history(0:itrlim)
@@ -542,7 +545,7 @@ contains
     real(8),intent(out),optional :: xn_out,xp_out
     
     real(8) :: logrho0
-    real(8) :: logge(n_spec), logx(n_spec), x(n_spec), fcoul(n_spec), g(n_spec)
+    real(8) :: logge(net%n_spec), logx(net%n_spec), x(net%n_spec), fcoul(net%n_spec), g(net%n_spec)
     
     real(8) :: xp,xn
 
@@ -575,8 +578,8 @@ contains
        fcoul(:) = 0d0
     endif
     !
-    logge(1:n_spec) = log(g(1:n_spec)) + 2.5d0*log(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp) &
-         - fcoul(1:n_spec)*mev2erg/(kerg*temp)
+    logge(:) = log(g(:)) + 2.5d0*log(net%a(:)) + logrho0 - net%mexc(:)*mev2erg/(kerg*temp) &
+         - fcoul(:)*mev2erg/(kerg*temp)
     
     if(present(xn_history)) xn_history(:) = 0d0
     if(present(xp_history)) xp_history(:) = 0d0
@@ -595,10 +598,10 @@ contains
             k2 = jnuc_reaclib(56,26)
          endif
 
-         z1 = z(k1)
-         z2 = z(k2)
-         a1 = a(k1)
-         a2 = a(k2)
+         z1 = net%z(k1)
+         z2 = net%z(k2)
+         a1 = net%a(k1)
+         a2 = net%a(k2)
          n1 = a1-z1
          n2 = a2-z2
          x2 = (z1/a1 - ye)/(z1/a1 - z2/a2)
@@ -606,8 +609,8 @@ contains
          
          g1 = g(k1)
          g2 = g(k2)
-         mex1 = mexc(k1)*mev2erg
-         mex2 = mexc(k2)*mev2erg
+         mex1 = net%mexc(k1)*mev2erg
+         mex2 = net%mexc(k2)*mev2erg
          
          ! (mu_1 - m_1 c^2 + mexc_1*c^2)/kT
          eta01ex = -logrho0 + log(x1) - log(g1) - 2.5d0*log(a1) + (mexc(k1) + fcoul(k1))*mev2erg/(kerg*temp)
@@ -632,7 +635,7 @@ contains
           xp = -2d0*log(10d0) - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
           do itr=1,10000
              call step(net,xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
-             logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
+             logx(:) = logge(:) + net%z(:)*xp + net%n(:)*xn
              !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
              if( abs(det)>0d0 .and. dx<0d0 .and.dye<0d0)then
                 exit
@@ -721,10 +724,10 @@ contains
        endif
     enddo
 
-    logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
+    logx(:) = logge(:) + z(:)*xp + n(:)*xn
 
     block
-      real(8) :: logx_max, u(n_spec)
+      real(8) :: logx_max, u(net%n_spec)
       logx_max = maxval(logx(:))
       u(:) = exp(logx(:) - logx_max)
       xnse(:) = u(:) / sum(u(:))
@@ -814,7 +817,7 @@ contains
     real(8),intent(in) :: rho,temp,ye
     logical,intent(in) :: use_TNAguess
     real(8) :: logrho0
-    real(8) :: logge(n_spec), fcoul(n_spec)
+    real(8) :: logge(net%n_spec), fcoul(net%n_spec)
     
     real(8) :: xp,xn
 
@@ -826,12 +829,12 @@ contains
     integer :: itr,itr_out
     real(8) :: tol = 1d-12
     integer,parameter :: itrlim=1000
-    real(8) :: xn_history(0:itrlim),xp_history(0:itrlim),xnse(n_spec)
+    real(8) :: xn_history(0:itrlim),xp_history(0:itrlim),xnse(net%n_spec)
 
     ! real(8) :: xm,dxm,xm_min,xm_max
     logical :: nsefail
     real(8) :: t9
-    real(8) :: g(n_spec)
+    real(8) :: g(net%n_spec)
 
     call calc_nse(net,rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out)
     !write(6,*) xnse(:)
@@ -850,13 +853,13 @@ contains
     if(use_reaclib)call calc_ptf_nse(net,t9,g)
 
     if(use_reaclib)then
-       call calc_coulomb(rho,ye,fcoul)
+       call calc_coulomb(net,rho,ye,fcoul)
     else
        fcoul(:) = 0d0
     endif
     !
-    logge(1:n_spec) = log(g(1:n_spec)) + 2.5d0*log(a(1:n_spec)) + logrho0 - mexc(1:n_spec)*mev2erg/(kerg*temp) &
-         - fcoul(1:n_spec)*mev2erg/(kerg*temp)
+    logge(:) = log(g(:)) + 2.5d0*log(a(:)) + logrho0 - mexc(:)*mev2erg/(kerg*temp) &
+         - fcoul(:)*mev2erg/(kerg*temp)
 
     nn=100
     np=100
@@ -1103,40 +1106,41 @@ contains
     return
   end subroutine nse_alpha
   
-  subroutine statistic(x,mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
-    real(8),intent(in) :: x(n_spec)
+  subroutine statistic(net, x, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
+    type(nse_network_t), intent(in) :: net
+    real(8),intent(in) :: x(net%n_spec)
     real(8),intent(out) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum
 
     integer :: k
 
     mexc_ave = 0.d0
-    do k=1,n_spec
-       mexc_ave = mexc_ave + mexc(k)*x(k)/a(k)
+    do k=1,net%n_spec
+       mexc_ave = mexc_ave + mexc(k)*x(k)/net%a(k)
     enddo
 
     ytot = 0.d0
-    do k=1,n_spec
-       ytot = ytot + x(k)/a(k)
+    do k=1,net%n_spec
+       ytot = ytot + x(k)/net%a(k)
     enddo
 
     xsum = 0.d0
-    do k=1,n_spec
+    do k=1,net%n_spec
        xsum = xsum + x(k)
     enddo
 
     yesum = 0.d0
-    do k=1,n_spec
-       yesum = yesum + x(k)/a(k)*z(k)
+    do k=1,net%n_spec
+       yesum = yesum + x(k)/net%a(k)*net%z(k)
     enddo
 
     z_heavy = 0.d0
     a_heavy = 0.d0
     y_heavy = 0.d0
-    do k=1,n_spec
-       if(a(k)>4d0)then
-          z_heavy = z_heavy + z(k)*x(k)/a(k)
-          a_heavy = a_heavy + a(k)*x(k)/a(k)
-          y_heavy = y_heavy +      x(k)/a(k)
+    do k=1,net%n_spec
+       if(net%a(k)>4d0)then
+          z_heavy = z_heavy + net%z(k)*x(k)/net%a(k)
+          a_heavy = a_heavy + net%a(k)*x(k)/net%a(k)
+          y_heavy = y_heavy +          x(k)/net%a(k)
        endif
     enddo
     z_heavy = z_heavy / y_heavy
@@ -1148,7 +1152,7 @@ contains
   subroutine statistic_compose(net, rho, x, stat)
     use const, only:emev
     type(nse_network_t),intent(in) :: net
-    real(8),intent(in) :: rho, x(n_spec)
+    real(8),intent(in) :: rho, x(net%n_spec)
     type(stat_t),intent(out) :: stat
 
     integer :: k
@@ -1157,46 +1161,46 @@ contains
     real(8) :: z_heavy, a_heavy, y_heavy
 
     yesum = 0.d0
-    do k=1,n_spec
-       yesum = yesum + x(k)/a(k)*z(k)
+    do k=1,net%n_spec
+       yesum = yesum + x(k)/net%a(k)*net%z(k)
     enddo
 
     ! mass-excess per baryon
     ! add m_e*c^2 * Ye to account for the rest-mass of balence electrons.
     mexc_ave = 0.d0
-    do k=1,n_spec
-       mexc_ave = mexc_ave + mexc(k)*x(k)/a(k)
+    do k=1,net%n_spec
+       mexc_ave = mexc_ave + net%mexc(k)*x(k)/net%a(k)
     enddo
     mexc_ave = mexc_ave + emev*yesum
     stat%mexc = mexc_ave
 
     ytot = 0.d0
-    do k=1,n_spec
-       ytot = ytot + x(k)/a(k)
+    do k=1,net%n_spec
+       ytot = ytot + x(k)/net%a(k)
     enddo
     stat%abar = 1d0/ytot
     
     z_heavy = 0.d0
     a_heavy = 0.d0
     y_heavy = 0.d0
-    do k=1,n_spec
-       ! write(6,*) k, name_nucl(k), x(k), nint(a(k)), nint(z(k))
-       if    (nint(a(k))==1.and.nint(z(k))==0)then ! n
-          stat%yn = x(k)/a(k)
-       elseif(nint(a(k))==1.and.nint(z(k))==1)then ! p
-          stat%yp = x(k)/a(k)
-       elseif(nint(a(k))==2.and.nint(z(k))==1)then ! h2
-          stat%yh2 = x(k)/a(k)
-       elseif(nint(a(k))==3.and.nint(z(k))==1)then ! h3
-          stat%yh3 = x(k)/a(k)
-       elseif(nint(a(k))==3.and.nint(z(k))==2)then ! he3
-          stat%yhe3 = x(k)/a(k)
-       elseif(nint(a(k))==4.and.nint(z(k))==2)then ! he4
-          stat%yhe4 = x(k)/a(k)
+    do k=1,net%n_spec
+       ! write(6,*) k, name_nucl(k), x(k), nint(net%a(k)), nint(net%z(k))
+       if    (nint(net%a(k))==1.and.nint(net%z(k))==0)then ! n
+          stat%yn = x(k)/net%a(k)
+       elseif(nint(net%a(k))==1.and.nint(net%z(k))==1)then ! p
+          stat%yp = x(k)/net%a(k)
+       elseif(nint(net%a(k))==2.and.nint(net%z(k))==1)then ! h2
+          stat%yh2 = x(k)/net%a(k)
+       elseif(nint(net%a(k))==3.and.nint(net%z(k))==1)then ! h3
+          stat%yh3 = x(k)/net%a(k)
+       elseif(nint(net%a(k))==3.and.nint(net%z(k))==2)then ! he3
+          stat%yhe3 = x(k)/net%a(k)
+       elseif(nint(net%a(k))==4.and.nint(net%z(k))==2)then ! he4
+          stat%yhe4 = x(k)/net%a(k)
        else
-          z_heavy = z_heavy + z(k)*x(k)/a(k)
-          a_heavy = a_heavy + a(k)*x(k)/a(k)
-          y_heavy = y_heavy +      x(k)/a(k)
+          z_heavy = z_heavy + net%z(k)*x(k)/net%a(k)
+          a_heavy = a_heavy + net%a(k)*x(k)/net%a(k)
+          y_heavy = y_heavy +          x(k)/net%a(k)
        endif
     enddo
     z_heavy = z_heavy / y_heavy
@@ -1212,9 +1216,10 @@ contains
   end subroutine statistic_compose
 
 
-  subroutine output_composition(x,temp,rho,ye)
+  subroutine output_composition(net, x,temp,rho,ye)
     use module_ptf_reaclib
-    real(8),intent(in) :: x(n_spec)
+    type(nse_network_t), intent(in) :: net
+    real(8),intent(in) :: x(net%n_spec)
     real(8),intent(in) :: temp,rho,ye
     
     real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum
@@ -1222,8 +1227,8 @@ contains
     
     integer :: a_max, z_max, ia,iz,k
 
-    a_max = nint(maxval(a(:)))
-    z_max = nint(maxval(z(:)))
+    a_max = nint(maxval(net%a(:)))
+    z_max = nint(maxval(net%z(:)))
 
     allocate(xa(a_max),ya(a_max),xz(0:z_max),yz(0:z_max))
     
@@ -1232,17 +1237,17 @@ contains
     ya(:)=0d0
     yz(:)=0d0
 
-    do k=1,n_spec
-       ia = nint(a(k))
-       iz = nint(z(k))
+    do k=1,net%n_spec
+       ia = nint(net%a(k))
+       iz = nint(net%z(k))
        xa(ia) = xa(ia) + x(k)
        xz(iz) = xz(iz) + x(k)
        
-       ya(ia) = ya(ia) + x(k)/a(k)
-       yz(iz) = yz(iz) + x(k)/a(k)
+       ya(ia) = ya(ia) + x(k)/net%a(k)
+       yz(iz) = yz(iz) + x(k)/net%a(k)
     enddo
 
-    call statistic(x,mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
+    call statistic(net, x, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
 
     open(11,file="aabun",status="replace",action="write")
     write(11,'("# T,rho,Ye = ",99es12.4)') temp,rho,ye
@@ -1264,8 +1269,8 @@ contains
     open(11,file="abun",status="replace",action="write")
     write(11,'("# T,rho,Ye = ",99es12.4)') temp,rho,ye
     write(11,'("#",99es12.4)') mexc_ave, z_heavy, a_heavy, ytot, xsum
-    do k=1,n_spec
-       write(11,'(3i5,99es15.6e3)') nint(n(k)),nint(z(k)),nint(a(k)),x(k),x(k)/a(k)
+    do k=1,net%n_spec
+       write(11,'(3i5,99es15.6e3)') nint(net%n(k)),nint(net%z(k)),nint(net%a(k)),x(k),x(k)/net%a(k)
     enddo
     ! do ia=1,a_max
     !    write(11,*)

@@ -8,7 +8,6 @@ program extraction
   integer,parameter :: itrlim = 300
   real(8),parameter :: tol = 1d-10
 
-  integer :: n_spec
   real(8),allocatable :: xnse(:)
 
   logical :: nsefail, use_TNAguess
@@ -25,6 +24,8 @@ program extraction
   integer :: iyq_target, it_target
 
   real(8) :: eps, pres, cs2, entr
+
+  type(nse_network_t) :: net
 
   iyq_target = 19
   it_target = 15
@@ -49,12 +50,12 @@ program extraction
     
     call init_ptf_reaclib(fn_winv)
     call init_ptf_rauscher(fn_raucher)
-    call nse_init_reaclib(n_spec, use_rauscher_ptf)
+    call nse_init_reaclib(net, use_rauscher_ptf)
 
     call init_eos(fn_helm)
   end block
 
-  allocate(xnse(n_spec))
+  allocate(xnse(net%n_spec))
   
   block
     use const, only: mu, mev2erg, mnmev, mumev
@@ -130,8 +131,8 @@ program extraction
        mres_Comp = E_Comp_MeV - E_helm_MeV
        Fcoul_Comp = y_n*fcoulomb_HS(rho, ye, z_n, a_n, n0_fm)
        
-       call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
-       call statistic_compose(rho, xnse, stat)
+       call calc_nse(net,rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
+       call statistic_compose(net, rho, xnse, stat)
        write(unit_com,'(" ",99es20.11e3)') rho, temp, ye,  a_n, z_n, y_n, abar, yn, yp, yh2, yh3, yhe3, yhe4, E_Comp_MeV, mres_Comp, Fcoul_Comp
        
        call eos_all(rho, temp, ye, 1d0/stat%abar, stat%mexc, &
