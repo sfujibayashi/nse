@@ -5,6 +5,7 @@ module module_nse
   public :: nse_init_four,calc_nse,test_converge,nse_init_reaclib,output_composition,statistic,statistic_compose, two_nuclei_approx, calc_ptf_HS
 
   public :: output_nse_full
+  public :: fcoulomb_HS
 
   integer :: n_spec
   real(8),allocatable :: mexc(:), a(:), z(:), n(:), zai(:), g0(:)
@@ -17,8 +18,9 @@ module module_nse
 
   logical :: use_rauscher_ptf = .true.  
 
-  real(8) :: n0_fm = 0.147d0
-
+  ! real(8), public :: n0_fm = 0.1491d0
+  real(8), public :: n0_fm = 0.1583d0
+  
   type :: stat_t
     real(8) :: yn
     real(8) :: yp
@@ -347,7 +349,7 @@ contains
 
   subroutine calc_coulomb_HS(rho, ye, n0_fm, fcoul)
 
-    use const, only : mu, pi, fine, hbar, clight, mev2erg
+    use const, only : mu
 
     real(8),intent(in)  :: rho, ye, n0_fm
     real(8),intent(out) :: fcoul(n_spec)
@@ -364,20 +366,48 @@ contains
 
     do k=1,n_spec
 
-       ! no Coulomb correction for free proton
-       if (a(k) <= 1d0 .or. z(k) <= 0d0) cycle
+       ! ! no Coulomb correction for free proton
+       ! if (a(k) <= 1d0 .or. z(k) <= 0d0) cycle
        
-       r = (3d0*a(k)/(4d0*pi*n0))**(1d0/3d0)
+       ! r = (3d0*a(k)/(4d0*pi*n0))**(1d0/3d0)
        
-       x = (ne/n0 * a(k)/z(k))**(1d0/3d0)
+       ! x = (ne/n0 * a(k)/z(k))**(1d0/3d0)
        
-       fcoul(k) = -3d0/5d0 * z(k)**2 * fine*hbar*clight/r &
-            * (1.5d0*x - 0.5d0*x**3) / mev2erg
-       
+       ! fcoul(k) = -3d0/5d0 * z(k)**2 * fine*hbar*clight/r &
+       !      * (1.5d0*x - 0.5d0*x**3) / mev2erg
+       fcoul(k) = fcoulomb_HS(rho, ye, z(k), a(k), n0_fm)
     enddo
     
   end subroutine calc_coulomb_HS
+  
+  function fcoulomb_HS(rho, ye, z, a, n0_fm) result(fcoul)
 
+    use const, only : mu, pi, fine, hbar, clight, mev2erg
+    
+    real(8),intent(in)  :: rho, ye, z, a, n0_fm
+    real(8) :: fcoul
+    real(8) :: ne, n0, r, x
+
+    ! fm^-3 -> cm^-3
+    n0 = n0_fm * 1d39
+
+    ne = ye*rho/mu
+
+    ! no Coulomb correction for free proton
+    if (a <= 1d0 .or. z <= 0d0)then
+       fcoul = 0d0
+       return
+    endif
+    
+    r = (3d0*a/(4d0*pi*n0))**(1d0/3d0)
+    
+    x = (ne/n0 * a/z)**(1d0/3d0)
+    
+    fcoul = -3d0/5d0 * z**2 * fine*hbar*clight/r &
+         * (1.5d0*x - 0.5d0*x**3) / mev2erg
+    
+  end function fcoulomb_HS
+  
   ! ! coulomb correction in Hempel+2010 Eq.(6)
   ! function Ecoul_HS10_eq6(z, a, n0, ne) result(ecoul)
   !   use const, only : pi, fine
@@ -423,9 +453,13 @@ contains
        if (mod(ia,2) == 0) then
           g0 = 1d0
        else
-          g0 = 3d0
+          g0 = 2d0
        endif
 
+       if (ia == 2 .and. nint(z(k)) == 1) then
+          g0 = 3.d0
+       endif
+       
        ! Total nuclear binding energy [MeV]
        !
        ! mexc is the bare-nuclear mass excess:
