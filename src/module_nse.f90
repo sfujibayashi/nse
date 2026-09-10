@@ -149,12 +149,12 @@ contains
     write(6,'(a,i6)') "NSE species kept         = ", net%n_spec
 
 
-    allocate(net%ireaclib(n_spec))
-    allocate(net%irauscher(n_spec))
+    allocate(net%ireaclib(net%n_spec))
+    allocate(net%irauscher(net%n_spec))
 
-    allocate(net%name_nucl(n_spec))
-    allocate(net%mexc(n_spec), net%a(n_spec), net%z(n_spec), net%n(n_spec), &
-         net%g0(n_spec), net%zai(n_spec))
+    allocate(net%name_nucl(net%n_spec))
+    allocate(net%mexc(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), &
+         net%g0(net%n_spec), net%zai(net%n_spec))
 
     ! ---------------------------------------------------------
     ! Construct NSE species arrays
@@ -175,14 +175,14 @@ contains
           net%z(i) = dble(npt_reaclib(k))
           net%n(i) = dble(nnt_reaclib(k))
 
-          net%mexc(i) = exc_reaclib(k) - z(i)*memev
+          net%mexc(i) = exc_reaclib(k) - net%z(i)*memev
           net%name_nucl(i) = name_reaclib(k)
 
        endif
 
     enddo
 
-    if (i /= n_spec) then
+    if (i /= net%n_spec) then
        write(*,*) "ERROR constructing NSE species:", i, net%n_spec
        stop
     endif
