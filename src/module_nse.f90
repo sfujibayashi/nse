@@ -87,25 +87,25 @@ contains
     
   end subroutine nse_init_four
 
-  subroutine nse_init_reaclib(n_spec_out, use_rauscher_ptf_in)
+  subroutine nse_init_reaclib(net, use_rauscher_ptf_in)
 
     use module_ptf_reaclib
     use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
     use const, only: memev
     
-    integer,intent(out) :: n_spec_out
+    type(nse_network_t),intent(out) :: net
     logical,intent(in) :: use_rauscher_ptf_in
 
     integer :: i, j, k
     integer,allocatable :: jrauscher(:)
 
-    use_rauscher_ptf = use_rauscher_ptf_in
+    net%use_rauscher_ptf = use_rauscher_ptf_in
 
-    write(6,*) "Use Rauscher' ptf table?", use_rauscher_ptf
+    write(6,*) "Use Rauscher' ptf table?", net%use_rauscher_ptf
 
     allocate(jrauscher(nct_reaclib))
     jrauscher(:) = 0
-
+    
     ! ---------------------------------------------------------
     ! WinVNE index -> Rauscher index
     ! ---------------------------------------------------------
@@ -116,7 +116,7 @@ contains
 
           if (npt_reaclib(k) == z_rauscher(j) .and. &
                naw_reaclib(k) == a_rauscher(j)) then
-
+             
              jrauscher(k) = j
              exit
 
@@ -135,7 +135,7 @@ contains
     !   Rauscher-missing nuclei with Z >= 87
     ! ---------------------------------------------------------
 
-    n_spec = count((jrauscher > 0) .or. (npt_reaclib < 87))
+    net%n_spec = count((jrauscher > 0) .or. (npt_reaclib < 87))
 
     write(6,'(a,i6)') "Rauscher matched species = ", &
          count(jrauscher > 0)
@@ -146,15 +146,15 @@ contains
     write(6,'(a,i6)') "Excluded species         = ", &
          count((jrauscher == 0) .and. (npt_reaclib >= 87))
 
-    write(6,'(a,i6)') "NSE species kept         = ", n_spec
+    write(6,'(a,i6)') "NSE species kept         = ", net%n_spec
 
 
-    allocate(ireaclib(n_spec))
-    allocate(irauscher(n_spec))
+    allocate(net%ireaclib(n_spec))
+    allocate(net%irauscher(n_spec))
 
-    allocate(name_nucl(n_spec))
-    allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), &
-         g0(n_spec), zai(n_spec))
+    allocate(net%name_nucl(n_spec))
+    allocate(net%mexc(n_spec), net%a(n_spec), net%z(n_spec), net%n(n_spec), &
+         net%g0(n_spec), net%zai(n_spec))
 
     ! ---------------------------------------------------------
     ! Construct NSE species arrays
@@ -168,30 +168,28 @@ contains
 
           i = i + 1
 
-          ireaclib(i)  = k
-          irauscher(i) = jrauscher(k)
+          net%ireaclib(i)  = k
+          net%irauscher(i) = jrauscher(k)
 
-          a(i) = ams_reaclib(k)
-          z(i) = dble(npt_reaclib(k))
-          n(i) = dble(nnt_reaclib(k))
+          net%a(i) = ams_reaclib(k)
+          net%z(i) = dble(npt_reaclib(k))
+          net%n(i) = dble(nnt_reaclib(k))
 
-          mexc(i) = exc_reaclib(k) - z(i)*memev
-          name_nucl(i) = name_reaclib(k)
+          net%mexc(i) = exc_reaclib(k) - z(i)*memev
+          net%name_nucl(i) = name_reaclib(k)
 
        endif
 
     enddo
 
     if (i /= n_spec) then
-       write(*,*) "ERROR constructing NSE species:", i, n_spec
+       write(*,*) "ERROR constructing NSE species:", i, net%n_spec
        stop
     endif
 
-    zai(:) = z(:)/a(:)
+    net%zai(:) = net%z(:)/net%a(:)
 
-    use_reaclib = .true.
-
-    n_spec_out = n_spec
+    net%use_reaclib = .true.
 
     deallocate(jrauscher)
 
