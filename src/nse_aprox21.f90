@@ -10,6 +10,7 @@ program nse_aprox21
 
   type(nse_network_t) :: net_aprox21, net
   real(8),allocatable :: xnse(:), xnse_aprox21(:)
+  type(stat_t) :: stat, stat_aprox21
 
   logical :: nsefail, use_TNAguess
   
@@ -49,19 +50,29 @@ program nse_aprox21
   allocate(xnse(net%n_spec))
 
   call calc_nse(net_aprox21,rho,temp,ye,itrlim,tol,xnse_aprox21,nsefail,use_TNAguess)
+  if(nsefail)then
+     write(6,*) "NSE does not converge in aprox21"
+  endif
   call calc_nse(net,rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
+  if(nsefail)then
+     write(6,*) "NSE does not converge in large set"
+  endif
   
-  call statistic(net, xnse, mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum)
-  x_heavy = a_heavy*y_heavy
-
-  write(6,'(a, 11es16.7e3)') "rho, T, Ye = ", rho,temp,ye
-  call index_rank(n_rank, net_aprox21%n_spec, xnse_aprox21, index_r, 1d0)
-  write(6,'(10a16,10es16.7e3)') (net_aprox21%name_nucl(index_r(i)),i=1,n_rank), (xnse_aprox21(index_r(i)),i=1,n_rank)
-
-  call index_rank(n_rank, net%n_spec, xnse, index_r, 1d0)
-  write(6,'(10a16,10es16.7e3)') (net%name_nucl(index_r(i)),i=1,n_rank), (xnse(index_r(i)),i=1,n_rank)
-
   call output_nse_full(net_aprox21, rho, temp, ye, xnse_aprox21, fn_out)
   call output_nse_full(net, rho, temp, ye, xnse, "nse_full.dat")
+
+  write(6,'(a, 11es16.7e3)') "rho, T, Ye = ", rho,temp,ye
+  call statistic_compose(net, rho, xnse, stat)
+  call statistic_compose(net_aprox21, rho, xnse_aprox21, stat_aprox21)
+  ! call index_rank(n_rank, net_aprox21%n_spec, xnse_aprox21, index_r, 1d0)
+  ! write(6,'(10a16,10es16.7e3)') (net_aprox21%name_nucl(index_r(i)),i=1,n_rank), (xnse_aprox21(index_r(i)),i=1,n_rank)
+
+  ! call index_rank(n_rank, net%n_spec, xnse, index_r, 1d0)
+  ! write(6,'(10a16,10es16.7e3)') (net%name_nucl(index_r(i)),i=1,n_rank), (xnse(index_r(i)),i=1,n_rank)
+
+
+  write(6,'(a,99es20.11e3)') "aprox21: ",stat_aprox21%a_n, stat_aprox21%z_n, stat_aprox21%y_n, stat_aprox21%abar, stat_aprox21%yn, stat_aprox21%yp, stat_aprox21%yh2, stat_aprox21%yh3, stat_aprox21%yhe3, stat_aprox21%yhe4, stat_aprox21%mexc, stat_aprox21%ecoul
+  write(6,'(a,99es20.11e3)') "full   : ",stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4, stat%mexc, stat%ecoul
+
   
 end program nse_aprox21
