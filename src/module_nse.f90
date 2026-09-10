@@ -329,13 +329,14 @@ contains
     
   end subroutine calc_coulomb
 
-  subroutine calc_ptf_nse(t9,g)
+  subroutine calc_ptf_nse(net, t9, g)
 
     use module_ptf_reaclib
     use module_ptf_rauscher
 
+    type(nse_network_t), intent(in) :: net
     real(8),intent(in)  :: t9
-    real(8),intent(out) :: g(n_spec)
+    real(8),intent(out) :: g(net%n_spec)
 
     integer :: i, ir, iw
     real(8) :: pf
@@ -343,12 +344,12 @@ contains
     !call calc_ptf_HS(t9,g)
     !return
     
-    do i=1,n_spec
+    do i=1,net%n_spec
 
-       iw = ireaclib(i)
-       ir = irauscher(i)
+       iw = net%ireaclib(i)
+       ir = net%irauscher(i)
 
-       if (use_rauscher_ptf .and. ir > 0) then
+       if (net%use_rauscher_ptf .and. ir > 0) then
 
           ! Rauscher spin + Rauscher PF
           call get_ptf_rauscher(t9,ir,pf)
@@ -368,35 +369,26 @@ contains
 
   end subroutine calc_ptf_nse
 
-  subroutine calc_coulomb_HS(rho, ye, n0_fm, fcoul)
+  subroutine calc_coulomb_HS(net, rho, ye, fcoul)
 
     use const, only : mu
 
-    real(8),intent(in)  :: rho, ye, n0_fm
-    real(8),intent(out) :: fcoul(n_spec)
+    type(nse_network_t), intent(in) :: net
+    real(8),intent(in)  :: rho, ye
+    real(8),intent(out) :: fcoul(net%n_spec)
 
     real(8) :: ne, n0, r, x
     integer :: k
 
     ! fm^-3 -> cm^-3
-    n0 = n0_fm * 1d39
+    n0 = net%n0_fm * 1d39
 
     ne = ye*rho/mu
 
     fcoul(:) = 0d0
 
-    do k=1,n_spec
-
-       ! ! no Coulomb correction for free proton
-       ! if (a(k) <= 1d0 .or. z(k) <= 0d0) cycle
-       
-       ! r = (3d0*a(k)/(4d0*pi*n0))**(1d0/3d0)
-       
-       ! x = (ne/n0 * a(k)/z(k))**(1d0/3d0)
-       
-       ! fcoul(k) = -3d0/5d0 * z(k)**2 * fine*hbar*clight/r &
-       !      * (1.5d0*x - 0.5d0*x**3) / mev2erg
-       fcoul(k) = fcoulomb_HS(rho, ye, z(k), a(k), n0_fm)
+    do k=1,net%n_spec
+       fcoul(k) = fcoulomb_HS(rho, ye, net%z(k), net%a(k), net%n0_fm)
     enddo
     
   end subroutine calc_coulomb_HS
@@ -443,11 +435,12 @@ contains
   ! end function Ecoul_HS10_eq6
 
   ! partition function used in HS-type EOS (Fai-Randrup)
-  subroutine calc_ptf_HS(t9,g)
+  subroutine calc_ptf_HS(net,t9,g)
     use const, only : mev2k, mpmev, mnmev, mumev, pi
     
+    type(nse_network_t),intent(in) :: net
     real(8),intent(in)  :: t9
-    real(8),intent(out) :: g(n_spec)
+    real(8),intent(out) :: g(net%n_spec)
 
     real(8),parameter :: c1 = 0.2d0
     real(8),parameter :: c2 = 0.8d0
@@ -459,9 +452,9 @@ contains
     ! T9 -> MeV
     temp_mev = t9*1d9/mev2k
 
-    do k=1,n_spec
+    do k=1,net%n_spec
 
-       ia = nint(a(k))
+       ia = nint(net%a(k))
 
        ! free neutron / proton:
        ! spin degeneracy = 2, no nuclear excited states
@@ -477,7 +470,7 @@ contains
           g0 = 2d0
        endif
 
-       if (ia == 2 .and. nint(z(k)) == 1) then
+       if (ia == 2 .and. nint(net%z(k)) == 1) then
           g0 = 3.d0
        endif
        
@@ -485,8 +478,8 @@ contains
        !
        ! mexc is the bare-nuclear mass excess:
        ! M_nuc c^2 = A m_u c^2 + mexc
-       bind = z(k)*mpmev + n(k)*mnmev &
-            - (a(k)*mumev + mexc(k))
+       bind = net%z(k)*mpmev + net%n(k)*mnmev &
+            - (net%a(k)*mumev + net%mexc(k))
 
        emax = max(bind,0d0)
 
@@ -496,11 +489,11 @@ contains
        endif
 
        ! level-density parameter [MeV^-1]
-       aa = a(k)/8d0 * (1d0 - c2*a(k)**(-1d0/3d0))
+       aa = net%a(k)/8d0 * (1d0 - c2*net%a(k)**(-1d0/3d0))
 
        iexc = excited_HS(temp_mev,aa,emax)
 
-       g(k) = g0 + c1/a(k)**(5d0/3d0)*iexc
+       g(k) = g0 + c1/net%a(k)**(5d0/3d0)*iexc
 
     enddo
 
@@ -532,9 +525,10 @@ contains
     
   ! end function excited_HS10
   
-  subroutine calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
+  subroutine calc_nse(net, rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
+    type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,temp,ye
     integer,intent(in) :: itrlim
     real(8),intent(in) :: tol
@@ -570,13 +564,13 @@ contains
     ! partition function may be calculated here
     t9 = temp/1d9
     if(use_reaclib)then
-       call calc_ptf_nse(t9,g)
+       call calc_ptf_nse(net, t9,g)
     else
        g(:) = g0(:)
     endif
     
     if(use_reaclib)then
-       call calc_coulomb_HS(rho, ye, n0_fm, fcoul)
+       call calc_coulomb_HS(net, rho, ye, fcoul)
     else
        fcoul(:) = 0d0
     endif
@@ -595,7 +589,7 @@ contains
          real(8) :: z1,z2,a1,a2,x1,x2,g1,g2,mex1,mex2,n1,n2
 
          if(ye/=0.5d0)then
-            call two_nuclei_approx_index(ye, fcoul, k1, k2)
+            call two_nuclei_approx_index(net, ye, fcoul, k1, k2)
          else
             k1 = jnuc_reaclib(1,1)
             k2 = jnuc_reaclib(56,26)
@@ -637,7 +631,7 @@ contains
           xn = -2d0*log(10d0) - logge(1)! + 100d0*ye/(temp/1.16d9)*0d0
           xp = -2d0*log(10d0) - logge(2)! - 100d0*ye/(temp/1.16d9)*0d0
           do itr=1,10000
-             call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
+             call step(net,xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
              logx(1:n_spec) = logge(1:n_spec) + z(1:n_spec)*xp + n(1:n_spec)*xn
              !write(6,'(99es12.4)') xn,xp,det,maxval(logx(:)),minval(logx(:))
              if( abs(det)>0d0 .and. dx<0d0 .and.dye<0d0)then
@@ -688,7 +682,7 @@ contains
        if(present(xp_history))xp_history(itr) = xp
        if(present(itr_out))itr_out = itr
 
-       call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
+       call step(net,xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
        
        if(present(err_out))err_out = max(abs(dx), abs(dye))
 
@@ -740,27 +734,28 @@ contains
 
   end subroutine calc_nse
 
-  subroutine two_nuclei_approx(rho,ye,xnse)
+  subroutine two_nuclei_approx(net,rho,ye,xnse)
+    type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,ye
-    real(8),intent(out) :: xnse(n_spec)
+    real(8),intent(out) :: xnse(net%n_spec)
     
     real(8) :: y1,y2, z1,z2,a1,a2
     integer :: k1,k2
 
-    real(8) :: fcoul(n_spec)
+    real(8) :: fcoul(net%n_spec)
     
-    if(use_reaclib)then
-       call calc_coulomb_HS(rho, ye, n0_fm, fcoul)
+    if(net%use_reaclib)then
+       call calc_coulomb_HS(net, rho, ye, fcoul)
     else
        fcoul(:) = 0d0
     endif
 
-    call two_nuclei_approx_index(ye, fcoul, k1, k2)
+    call two_nuclei_approx_index(net, ye, fcoul, k1, k2)
 
-    z1 = z(k1)
-    z2 = z(k2)
-    a1 = a(k1)
-    a2 = a(k2)
+    z1 = net%z(k1)
+    z2 = net%z(k2)
+    a1 = net%a(k1)
+    a2 = net%a(k2)
     y2 = (z1/a1 - ye)/(z1/a1 - z2/a2)/a2
     y1 = (1d0 - a2*y2)/a1
     
@@ -771,8 +766,9 @@ contains
   end subroutine two_nuclei_approx
 
 
-  subroutine two_nuclei_approx_index(ye,fcoul,k1_min,k2_min)
-    real(8),intent(in) :: ye, fcoul(n_spec)
+  subroutine two_nuclei_approx_index(net,ye,fcoul,k1_min,k2_min)
+    type(nse_network_t),intent(in) :: net
+    real(8),intent(in) :: ye, fcoul(net%n_spec)
     integer,intent(out) :: k1_min,k2_min
     real(8) :: y1,y2, z1,z2,a1,a2, mexc1, mexc2, f, f_min
 
@@ -781,18 +777,18 @@ contains
     k1_min = 0
     k2_min = 0
     f_min = 1d99
-    do k1=1,n_spec
+    do k1=1,net%n_spec
        do k2=1,k1-1
-          z1 = z(k1)
-          z2 = z(k2)
-          a1 = a(k1)
-          a2 = a(k2)
+          z1 = net%z(k1)
+          z2 = net%z(k2)
+          a1 = net%a(k1)
+          a2 = net%a(k2)
           if( (z1/a1 - ye)*(z1/a1 - z2/a2) > 0d0 )then
              y2 = (z1/a1 - ye)/(z1/a1 - z2/a2)/a2
              y1 = (1d0 - a2*y2)/a1
              
-             mexc1 = mexc(k1)
-             mexc2 = mexc(k2)
+             mexc1 = net%mexc(k1)
+             mexc2 = net%mexc(k2)
              
              f = (mexc1+fcoul(k1))*y1 + (mexc2+fcoul(k2))*y2
 
@@ -811,10 +807,10 @@ contains
     
   end subroutine two_nuclei_approx_index
 
-  subroutine test_converge(rho,temp,ye,use_TNAguess)
+  subroutine test_converge(net,rho,temp,ye,use_TNAguess)
     use const,only : mu,kerg,pi,hbar,mev2erg
     use module_ptf_reaclib
-
+    type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,temp,ye
     logical,intent(in) :: use_TNAguess
     real(8) :: logrho0
@@ -837,7 +833,7 @@ contains
     real(8) :: t9
     real(8) :: g(n_spec)
 
-    call calc_nse(rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out)
+    call calc_nse(net,rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out)
     !write(6,*) xnse(:)
     write(6,*) itr_out
 
@@ -851,7 +847,7 @@ contains
 
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(use_reaclib)call calc_ptf_nse(t9,g)
+    if(use_reaclib)call calc_ptf_nse(net,t9,g)
 
     if(use_reaclib)then
        call calc_coulomb(rho,ye,fcoul)
@@ -901,7 +897,7 @@ contains
           !xm = xm_min + (xm_max-xm_min)*dble(in-1)/dble(nn-1)
 
           !call step2(xp,xm,ye,logge,dx,dye,dxp,dxm)
-          call step(xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
+          call step(net,xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
           
           write(99,'(99es13.4e3)') xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp
           !write(99,'(99es13.4e3)') xp,xm,dx,dye,dxp,dxm
@@ -913,25 +909,26 @@ contains
   end subroutine test_converge
 
 
-  subroutine step(xn,xp,ye,logge,dx,dye,dxn,dxp,det_out,dxdn_out,dxdp_out,dyedn_out,dyedp_out,rcond_out)
+  subroutine step(net,xn,xp,ye,logge,dx,dye,dxn,dxp,det_out,dxdn_out,dxdp_out,dyedn_out,dyedp_out,rcond_out)
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: xn,xp,ye
-    real(8),intent(in) :: logge(n_spec)
+    real(8),intent(in) :: logge(net%n_spec)
     real(8),intent(out) :: dx,dye,dxn,dxp
     real(8),intent(out),optional :: det_out,dxdn_out,dxdp_out,dyedn_out,dyedp_out, rcond_out
     
-    real(8) :: logx(n_spec), x(n_spec)
+    real(8) :: logx(net%n_spec), x(net%n_spec)
 
     real(8) :: xsum,yesum
     real(8) :: det,dxdn,dxdp,dyedn,dyedp
 
-    real(8) :: u(n_spec), logx_max, logx_sum, uq(n_spec), logq_max, usum, qsum, w(n_spec), qbar
+    real(8) :: u(net%n_spec), logx_max, logx_sum, uq(net%n_spec), logq_max, usum, qsum, w(net%n_spec), qbar
     real(8) :: f1, f2, nbar, zbar, qnbar, qzbar, df1dn, df1dp, df2dn, df2dp
 
     real(8),parameter :: rcond_min = 1d-12
     real(8) :: jnorm1, adjnorm1, rcond
 
-    logx(:) = logge(:) + z(:)*xp + n(:)*xn
+    logx(:) = logge(:) + net%z(:)*xp + net%n(:)*xn
 
     logx_max = maxval(logx(:))
 
@@ -943,21 +940,21 @@ contains
     f1 = logx_max + log(usum)
     
     ! Jacobian
-    df1dn = sum(n(:)*u(:)) / usum
-    df1dp = sum(z(:)*u(:)) / usum
+    df1dn = sum(net%n(:)*u(:)) / usum
+    df1dp = sum(net%z(:)*u(:)) / usum
     
-    logq_max = maxval(logx(:), mask=zai(:) > 0d0)
+    logq_max = maxval(logx(:), mask=net%zai(:) > 0d0)
     
     uq(:) = 0d0
-    where (zai(:) > 0d0)
-       uq(:) = zai(:)*exp(logx(:) - logq_max)
+    where (net%zai(:) > 0d0)
+       uq(:) = net%zai(:)*exp(logx(:) - logq_max)
     end where
     qsum = sum(uq(:))
 
     f2 = logq_max + log(qsum) - log(ye)
 
-    df2dn = sum(n(:)*uq(:))/qsum
-    df2dp = sum(z(:)*uq(:))/qsum
+    df2dn = sum(net%n(:)*uq(:))/qsum
+    df2dp = sum(net%z(:)*uq(:))/qsum
     
     det = df1dn*df2dp - df1dp*df2dn
 
@@ -1148,8 +1145,9 @@ contains
   end subroutine statistic
 
 
-  subroutine statistic_compose(rho, x, stat)
+  subroutine statistic_compose(net, rho, x, stat)
     use const, only:emev
+    type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho, x(n_spec)
     type(stat_t),intent(out) :: stat
 
@@ -1208,7 +1206,7 @@ contains
     stat%z_n = z_heavy
     stat%y_n = y_heavy
 
-    call calc_coulomb_average(rho, yesum, x, ecoul_ave)
+    call calc_coulomb_average(net, rho, yesum, x, ecoul_ave)
     
     stat%ecoul = ecoul_ave
   end subroutine statistic_compose
@@ -1288,36 +1286,37 @@ contains
 
   end subroutine output_composition
   
-  subroutine output_nse_full(rho,temp,ye,xnse, output_filename)
+  subroutine output_nse_full(net,rho,temp,ye,xnse, output_filename)
+    type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,temp,ye
-    real(8),intent(in) :: xnse(n_spec)
+    real(8),intent(in) :: xnse(net%n_spec)
     character(*),intent(in) :: output_filename
     integer :: unit
     integer :: i
-    real(8) :: g(n_spec)
+    real(8) :: g(net%n_spec)
     real(8) :: t9
     
     t9 = temp/1d9
-    call calc_ptf_nse(t9,g)
+    call calc_ptf_nse(net,t9,g)
     open(newunit=unit, file=output_filename, status="replace", action="write")
     write(unit, '("#",99a20)') "index", "name", "A", "Z", "N", "Xi", "Yi", "gi"
-    do i=1,n_spec
-       write(unit, '(" ",i20,a20,3i20,3es20.10e3)') i, name_nucl(i), nint(a(i)), nint(z(i)), nint(n(i)), xnse(i), xnse(i)/a(i), g(i)
+    do i=1,net%n_spec
+       write(unit, '(" ",i20,a20,3i20,3es20.10e3)') i, net%name_nucl(i), nint(net%a(i)), nint(net%z(i)), nint(net%n(i)), xnse(i), xnse(i)/net%a(i), g(i)
     end do
     close(unit)
   end subroutine output_nse_full
   
-  subroutine calc_coulomb_average(rho, ye, x, ecoul_ave)
-    
+  subroutine calc_coulomb_average(net, rho, ye, x, ecoul_ave)
+    type(nse_network_t),intent(in) :: net
     real(8),intent(in)  :: rho, ye
-    real(8),intent(in)  :: x(n_spec)
+    real(8),intent(in)  :: x(net%n_spec)
     real(8),intent(out) :: ecoul_ave
     
-    real(8) :: fcoul(n_spec)
+    real(8) :: fcoul(net%n_spec)
     
-    call calc_coulomb_HS(rho, ye, n0_fm, fcoul)
+    call calc_coulomb_HS(net, rho, ye, fcoul)
     
-    ecoul_ave = sum(x(:)/a(:) * fcoul(:))
+    ecoul_ave = sum(x(:)/net%a(:) * fcoul(:))
     
   end subroutine calc_coulomb_average
 
