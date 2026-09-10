@@ -1055,24 +1055,12 @@ contains
        rcond = 0d0
     endif
 
-    if (rcond < rcond_min) then
-       ! jac_bad = .true.
-       dxn = 0d0
-       dxp = 0d0
-       if(present(rcond_out)) rcond_out = rcond
-       return
-    endif
-
     ! if (.not. ieee_is_finite(det) .or. &
     !      .not. ieee_is_finite(rcond)) then
     !    jac_bad = .true.
     !    return
     ! endif
-
     
-    dxn = (-f1*df2dp + df1dp*f2)/det
-    dxp = ( df2dn*f1 - df1dn*f2)/det
-
     !dxn =-( dx*dyedp-dye*dxdp)/det
     !dxp =-(-dx*dyedn+dye*dxdn)/det
     dx = f1
@@ -1082,6 +1070,18 @@ contains
     if(present(dxdp_out)) dxdp_out = df1dp
     if(present(dyedn_out)) dyedn_out = df2dn
     if(present(dyedp_out)) dyedp_out = df2dp
+
+    if (rcond < rcond_min) then
+       ! jac_bad = .true.
+       dxn = 0d0
+       dxp = 0d0
+       if(present(rcond_out)) rcond_out = rcond
+       return
+    endif
+
+    dxn = (-f1*df2dp + df1dp*f2)/det
+    dxp = ( df2dn*f1 - df1dn*f2)/det
+
   end subroutine step
 
 
