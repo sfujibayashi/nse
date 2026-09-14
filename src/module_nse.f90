@@ -283,7 +283,6 @@ contains
     real(8),intent(out) :: g(net%n_spec)
 
     integer :: i, ir, iw
-    real(8) :: pf
 
     !call calc_ptf_HS(t9,g)
     !return
