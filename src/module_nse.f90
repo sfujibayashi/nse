@@ -2,25 +2,12 @@ module module_nse
   implicit none
 
   private
-  public :: nse_init_four,nse_init_aprox21,nse_init_reaclib
+  public :: nse_init_four,nse_init_aprox21,nse_init_winvne
   public :: calc_nse,test_converge,output_composition,statistic,statistic_compose, two_nuclei_approx, calc_ptf_HS
 
   public :: output_nse_full
   public :: fcoulomb_HS
   
-  !integer :: n_spec
-  !real(8),allocatable :: mexc(:), a(:), z(:), n(:), zai(:), g0(:)
-  !character(5),allocatable :: name_nucl(:)
-  
-  !logical :: use_reaclib
-
-  !integer,allocatable,public :: ireaclib(:)
-  !integer,allocatable :: irauscher(:) 
-
-  !logical :: use_rauscher_ptf = .true.  
-
-  ! real(8), public :: n0_fm = 0.1491d0
-  !real(8), public :: n0_fm = 0.1583d0
   
   type :: stat_t
     real(8) :: yn
@@ -51,10 +38,10 @@ module module_nse
     
     character(5), allocatable :: name_nucl(:)
     
-    integer, allocatable :: ireaclib(:)
+    integer, allocatable :: iwinvne(:)
     integer, allocatable :: irauscher(:)
     
-    logical :: use_reaclib = .false.
+    logical :: use_winvne = .false.
     logical :: use_rauscher_ptf = .true.
     
     real(8) :: n0_fm = 0.1583d0
@@ -70,7 +57,7 @@ contains
     real(8),parameter :: mexc_56ni_mev = -53.907539d0
 
         
-    net%use_reaclib = .false.
+    net%use_winvne = .false.
 
     net%n_spec = 4
     allocate(net%mexc(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), net%g0(net%n_spec), net%zai(net%n_spec))
@@ -89,7 +76,7 @@ contains
 
   subroutine nse_init_aprox21(net, use_rauscher_ptf_in)
 
-    use module_ptf_reaclib
+    use module_nuclear_data_winvne
     use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
     use const, only: memev
 
@@ -107,17 +94,17 @@ contains
     integer :: i, j, iw, ir
 
     net%n_spec = ns
-    net%use_reaclib = .true.
+    net%use_winvne = .true.
     net%use_rauscher_ptf = use_rauscher_ptf_in
 
-    allocate(net%ireaclib(ns), net%irauscher(ns))
+    allocate(net%iwinvne(ns), net%irauscher(ns))
     allocate(net%name_nucl(ns))
     allocate(net%mexc(ns), net%a(ns), net%z(ns), net%n(ns), &
          net%g0(ns), net%zai(ns))
 
     do i = 1, ns
 
-       iw = jnuc_reaclib(aa(i), zz(i))
+       iw = jnuc_winvne(aa(i), zz(i))
 
        if (iw <= 0) then
           write(*,*) "ERROR: aprox21 nucleus missing from WinVNE:", aa(i), zz(i)
@@ -133,15 +120,15 @@ contains
           endif
        enddo
 
-       net%ireaclib(i)  = iw
+       net%iwinvne(i)  = iw
        net%irauscher(i) = ir
 
-       net%a(i) = ams_reaclib(iw)
-       net%z(i) = dble(npt_reaclib(iw))
-       net%n(i) = dble(nnt_reaclib(iw))
+       net%a(i) = ams_winvne(iw)
+       net%z(i) = dble(npt_winvne(iw))
+       net%n(i) = dble(nnt_winvne(iw))
 
-       net%mexc(i) = exc_reaclib(iw) - net%z(i)*memev
-       net%name_nucl(i) = name_reaclib(iw)
+       net%mexc(i) = exc_winvne(iw) - net%z(i)*memev
+       net%name_nucl(i) = name_winvne(iw)
 
     enddo
 
@@ -149,9 +136,9 @@ contains
 
   end subroutine nse_init_aprox21
 
-  subroutine nse_init_reaclib(net, use_rauscher_ptf_in)
+  subroutine nse_init_winvne(net, use_rauscher_ptf_in)
 
-    use module_ptf_reaclib
+    use module_nuclear_data_winvne
     use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
     use const, only: memev
     
@@ -165,19 +152,19 @@ contains
 
     write(6,*) "Use Rauscher' ptf table?", net%use_rauscher_ptf
 
-    allocate(jrauscher(nct_reaclib))
+    allocate(jrauscher(nct_winvne))
     jrauscher(:) = 0
     
     ! ---------------------------------------------------------
     ! WinVNE index -> Rauscher index
     ! ---------------------------------------------------------
 
-    do k=1,nct_reaclib
+    do k=1,nct_winvne
 
        do j=1,nct_rauscher
 
-          if (npt_reaclib(k) == z_rauscher(j) .and. &
-               naw_reaclib(k) == a_rauscher(j)) then
+          if (npt_winvne(k) == z_rauscher(j) .and. &
+               naw_winvne(k) == a_rauscher(j)) then
              
              jrauscher(k) = j
              exit
@@ -197,21 +184,21 @@ contains
     !   Rauscher-missing nuclei with Z >= 87
     ! ---------------------------------------------------------
 
-    net%n_spec = count((jrauscher > 0) .or. (npt_reaclib < 87))
+    net%n_spec = count((jrauscher > 0) .or. (npt_winvne < 87))
 
     write(6,'(a,i6)') "Rauscher matched species = ", &
          count(jrauscher > 0)
 
     write(6,'(a,i6)') "WinVNE PF fallback       = ", &
-         count((jrauscher == 0) .and. (npt_reaclib < 87))
+         count((jrauscher == 0) .and. (npt_winvne < 87))
 
     write(6,'(a,i6)') "Excluded species         = ", &
-         count((jrauscher == 0) .and. (npt_reaclib >= 87))
+         count((jrauscher == 0) .and. (npt_winvne >= 87))
 
     write(6,'(a,i6)') "NSE species kept         = ", net%n_spec
 
 
-    allocate(net%ireaclib(net%n_spec))
+    allocate(net%iwinvne(net%n_spec))
     allocate(net%irauscher(net%n_spec))
 
     allocate(net%name_nucl(net%n_spec))
@@ -224,21 +211,21 @@ contains
 
     i = 0
 
-    do k=1,nct_reaclib
+    do k=1,nct_winvne
 
-       if (jrauscher(k) > 0 .or. npt_reaclib(k) < 87) then
+       if (jrauscher(k) > 0 .or. npt_winvne(k) < 87) then
 
           i = i + 1
 
-          net%ireaclib(i)  = k
+          net%iwinvne(i)  = k
           net%irauscher(i) = jrauscher(k)
 
-          net%a(i) = ams_reaclib(k)
-          net%z(i) = dble(npt_reaclib(k))
-          net%n(i) = dble(nnt_reaclib(k))
+          net%a(i) = ams_winvne(k)
+          net%z(i) = dble(npt_winvne(k))
+          net%n(i) = dble(nnt_winvne(k))
 
-          net%mexc(i) = exc_reaclib(k) - net%z(i)*memev
-          net%name_nucl(i) = name_reaclib(k)
+          net%mexc(i) = exc_winvne(k) - net%z(i)*memev
+          net%name_nucl(i) = name_winvne(k)
 
        endif
 
@@ -251,121 +238,12 @@ contains
 
     net%zai(:) = net%z(:)/net%a(:)
 
-    net%use_reaclib = .true.
+    net%use_winvne = .true.
 
     deallocate(jrauscher)
 
-  end subroutine nse_init_reaclib
+  end subroutine nse_init_winvne
 
-  ! subroutine nse_init_reaclib(n_spec_out)
-  !   use module_ptf_reaclib
-  !   use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
-  !   use const,only:memev
-  !   integer, intent(out) :: n_spec_out
-  !   integer :: k,j,i
-
-  !   integer,allocatable :: jrauscher(:) 
-
-  !   allocate(jrauscher(nct_reaclib))
-
-  !   jrauscher(:) = 0    
-  !   do k = 1, nct_reaclib
-       
-  !      if (naw_reaclib(k) == 1) cycle
-       
-  !      do j = 1, nct_rauscher
-  !         if (npt_reaclib(k) == z_rauscher(j) .and. &
-  !              naw_reaclib(k) == a_rauscher(j)) then
-  !            jrauscher(k) = j
-  !            exit
-  !         endif
-  !      enddo
-       
-  !   enddo
-    
-  !   n_spec = 0
-  !   do k = 1, nct_reaclib
-       
-  !      if (naw_reaclib(k) == 1) then
-  !         ! n, p
-  !         n_spec = n_spec + 1
-  !      else if (jrauscher(k) > 0) then
-  !         n_spec = n_spec + 1
-  !      endif
-       
-  !   enddo
-
-  !   write(6,'(a,i6)') "Rauscher matched species = ", count(jrauscher > 0)
-  !   write(6,'(a,i6)') "NSE species kept        = ", n_spec
-
-
-  !   block
-  !     integer :: nmiss
-  !     nmiss = 0
-  !     do k = 1, nct_reaclib
-         
-  !        if (jrauscher(k) == 0) then
-  !           nmiss = nmiss + 1
-            
-  !           write(*,'(a5,3i6)') &
-  !                name_reaclib(k), &
-  !                naw_reaclib(k), &
-  !                npt_reaclib(k), &
-  !                nnt_reaclib(k)
-  !        endif
-         
-  !     enddo
-
-  !     write(*,*) "Missing from Rauscher =", nmiss
-  !   end block
-
-
-  !   allocate(ireaclib(n_spec))
-  !   allocate(irauscher(n_spec))
-    
-  !   ireaclib(:) = 0
-  !   i = 0
-  !   do k=1,nct_reaclib
-  !      ! Rauscher matched
-  !      if (jrauscher(k) > 0) then
-  !         i = i + 1
-  !         ireaclib(i)  = k
-  !         irauscher(i) = jrauscher(k)
-          
-  !         ! Rauscher missing, but keep non-superheavy species
-  !      else if (npt_reaclib(k) < 87) then
-          
-  !         i = i + 1
-  !         ireaclib(i)  = k
-  !         irauscher(i) = 0
-          
-  !      endif
-       
-  !   enddo
-
-  !   allocate(name_nucl(n_spec))
-  !   allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec), zai(n_spec))
-    
-  !   use_reaclib = .true.
-
-  !   n_spec = nct_reaclib
-  !   allocate(name_nucl(n_spec))
-  !   allocate(mexc(n_spec), a(n_spec), z(n_spec), n(n_spec), g(n_spec),zai(n_spec))
-
-  !   do i=1,nct_reaclib
-  !      k = ireaclib(i)
-  !      a(k) = ams_reaclib(k)
-  !      z(k) = dble(npt_reaclib(k))
-  !      n(k) = dble(nnt_reaclib(k))
-  !      mexc(k) = exc_reaclib(k) - z(k)*memev
-  !      name_nucl(k) = name_reaclib(k)
-  !   enddo
-    
-  !   zai(1:n_spec) = z(1:n_spec)/a(1:n_spec)
-    
-  !   n_spec_out = n_spec
-    
-  ! end subroutine nse_init_reaclib
 
   subroutine calc_coulomb(net,rho,ye,fcoul)
     use const, only : qe, mu, pi, mev2erg
@@ -397,7 +275,7 @@ contains
 
   subroutine calc_ptf_nse(net, t9, g)
 
-    use module_ptf_reaclib
+    use module_nuclear_data_winvne
     use module_ptf_rauscher
 
     type(nse_network_t), intent(in) :: net
@@ -412,7 +290,7 @@ contains
     
     do i=1,net%n_spec
 
-       iw = net%ireaclib(i)
+       iw = net%iwinvne(i)
        ir = net%irauscher(i)
 
        if (net%use_rauscher_ptf .and. ir > 0) then
@@ -425,9 +303,9 @@ contains
        else
 
           ! WinVNE fallback
-          call get_ptf_reaclib(t9,iw,pf)
+          call get_ptf_winvne(t9,iw,pf)
 
-          g(i) = (2d0*spn_reaclib(iw) + 1d0)*pf
+          g(i) = (2d0*spn_winvne(iw) + 1d0)*pf
 
        endif
 
@@ -608,7 +486,7 @@ contains
   
   subroutine calc_nse(net, rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
     use const,only : mu,kerg,pi,hbar,mev2erg
-    use module_ptf_reaclib
+    use module_nuclear_data_winvne
     type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,temp,ye
     integer,intent(in) :: itrlim
@@ -644,13 +522,13 @@ contains
     
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(net%use_reaclib)then
+    if(net%use_winvne)then
        call calc_ptf_nse(net, t9,g)
     else
        g(:) = net%g0(:)
     endif
     
-    if(net%use_reaclib)then
+    if(net%use_winvne)then
        call calc_coulomb_HS(net, rho, ye, fcoul)
     else
        fcoul(:) = 0d0
@@ -831,7 +709,7 @@ contains
 
     real(8) :: fcoul(net%n_spec)
     
-    if(net%use_reaclib)then
+    if(net%use_winvne)then
        call calc_coulomb_HS(net, rho, ye, fcoul)
     else
        fcoul(:) = 0d0
@@ -896,7 +774,7 @@ contains
 
   subroutine test_converge(net,rho,temp,ye,use_TNAguess)
     use const,only : mu,kerg,pi,hbar,mev2erg
-    use module_ptf_reaclib
+    use module_nuclear_data_winvne
     type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,temp,ye
     logical,intent(in) :: use_TNAguess
@@ -934,9 +812,9 @@ contains
 
     ! partition function may be calculated here
     t9 = temp/1d9
-    if(net%use_reaclib)call calc_ptf_nse(net,t9,g)
+    if(net%use_winvne)call calc_ptf_nse(net,t9,g)
 
-    if(net%use_reaclib)then
+    if(net%use_winvne)then
        call calc_coulomb(net,rho,ye,fcoul)
     else
        fcoul(:) = 0d0
@@ -1301,7 +1179,7 @@ contains
 
 
   subroutine output_composition(net, x,temp,rho,ye)
-    use module_ptf_reaclib
+    use module_nuclear_data_winvne
     type(nse_network_t), intent(in) :: net
     real(8),intent(in) :: x(net%n_spec)
     real(8),intent(in) :: temp,rho,ye
@@ -1360,12 +1238,12 @@ contains
     !    write(11,*)
     !    !do iz=0,min(z_max,ia-1)
     !    do iz=0,z_max
-    !       if(jnuc_reaclib(ia,iz)==0)then
+    !       if(jnuc_winvne(ia,iz)==0)then
     !          x_dummy = 0d0
     !          y_dummy = 0d0
     !       else
-    !          x_dummy = x(jnuc_reaclib(ia,iz))
-    !          y_dummy = x(jnuc_reaclib(ia,iz))/dble(ia)
+    !          x_dummy = x(jnuc_winvne(ia,iz))
+    !          y_dummy = x(jnuc_winvne(ia,iz))/dble(ia)
     !       endif
     !       write(11,'(2i5,99es15.6e3)') iz,ia-iz, x_dummy,y_dummy
     !    enddo

@@ -1,6 +1,6 @@
 program extraction
   use module_nse
-  use module_ptf_reaclib
+  use module_nuclear_data_winvne
   use module_ptf_rauscher
   use module_eos_helmholtz
   implicit none
@@ -48,9 +48,9 @@ program extraction
     read(10,*);read(10,'(a)') fn_out
     close(10)
     
-    call init_ptf_reaclib(fn_winv)
+    call init_winvne(fn_winv)
     call init_ptf_rauscher(fn_raucher)
-    call nse_init_reaclib(net, use_rauscher_ptf)
+    call nse_init_winvne(net, use_rauscher_ptf)
     call nse_init_aprox21(net_aprox21, use_rauscher_ptf)
 
     call init_eos(fn_helm)
