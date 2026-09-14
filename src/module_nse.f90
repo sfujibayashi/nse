@@ -1,4 +1,8 @@
 module module_nse
+  use module_stat_weight_policy, only: stat_weight_policy_t, &
+       STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, &
+       valid_stat_weight_policy
+
   implicit none
 
   private
@@ -42,9 +46,11 @@ module module_nse
     integer, allocatable :: irauscher(:)
     
     logical :: use_winvne = .false.
-    logical :: use_rauscher_ptf = .true.
     
     real(8) :: n0_fm = 0.1583d0
+
+    type(stat_weight_policy_t) :: stat_weight_policy
+    
  end type nse_network_t
 
   public :: nse_network_t
@@ -74,14 +80,14 @@ contains
     
   end subroutine nse_init_four
 
-  subroutine nse_init_aprox21(net, use_rauscher_ptf_in)
+  subroutine nse_init_aprox21(net, stat_weight_policy)
 
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
     use const, only: memev
 
     type(nse_network_t), intent(out) :: net
-    logical, intent(in) :: use_rauscher_ptf_in
+    type(stat_weight_policy_t),intent(in) :: stat_weight_policy
 
     integer, parameter :: ns = 20
     integer, parameter :: aa(ns) = [ &
@@ -95,7 +101,14 @@ contains
 
     net%n_spec = ns
     net%use_winvne = .true.
-    net%use_rauscher_ptf = use_rauscher_ptf_in
+
+    if (.not. valid_stat_weight_policy(stat_weight_policy)) then
+       write(*,*) "ERROR: invalid statistical-weight policy"
+       error stop
+    endif
+    
+    net%stat_weight_policy = stat_weight_policy
+
 
     allocate(net%iwinvne(ns), net%irauscher(ns))
     allocate(net%name_nucl(ns))
@@ -136,21 +149,24 @@ contains
 
   end subroutine nse_init_aprox21
 
-  subroutine nse_init_winvne(net, use_rauscher_ptf_in)
+  subroutine nse_init_winvne(net, stat_weight_policy)
 
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
     use const, only: memev
     
     type(nse_network_t),intent(out) :: net
-    logical,intent(in) :: use_rauscher_ptf_in
+    type(stat_weight_policy_t), intent(in) :: stat_weight_policy
 
     integer :: i, j, k
     integer,allocatable :: jrauscher(:)
 
-    net%use_rauscher_ptf = use_rauscher_ptf_in
-
-    write(6,*) "Use Rauscher' ptf table?", net%use_rauscher_ptf
+    if (.not. valid_stat_weight_policy(stat_weight_policy)) then
+       write(*,*) "ERROR: invalid statistical-weight policy"
+       error stop
+    endif
+    
+    net%stat_weight_policy = stat_weight_policy
 
     allocate(jrauscher(nct_winvne))
     jrauscher(:) = 0
@@ -277,35 +293,109 @@ contains
 
     use module_nuclear_data_winvne, only: get_stat_weight_winvne
     use module_ptf_rauscher, only: get_stat_weight_rauscher
+    use module_stat_weight_policy, only: &
+         STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
 
     type(nse_network_t), intent(in) :: net
     real(8),intent(in)  :: t9
     real(8),intent(out) :: g(net%n_spec)
 
     integer :: i, ir, iw
+    
+    do i = 1, net%n_spec
+
+       select case (net%stat_weight_policy%primary)
+
+       case (STAT_WEIGHT_RAUSCHER)
+
+          if (net%irauscher(i) > 0) then
+
+             call get_stat_weight_rauscher( &
+                  t9, net%irauscher(i), g(i))
+
+          else
+
+             call get_fallback_stat_weight(net, i, t9, g(i))
+
+          endif
+
+       case (STAT_WEIGHT_WINVNE)
+
+          if (net%iwinvne(i) > 0) then
+
+             call get_stat_weight_winvne( &
+                  t9, net%iwinvne(i), g(i))
+
+          else
+
+             call get_fallback_stat_weight(net, i, t9, g(i))
+
+          endif
+
+       case default
+
+          write(*,*) "ERROR: invalid primary statistical-weight source"
+          error stop
+
+       end select
+
+    enddo
 
     !call calc_ptf_HS(t9,g)
     !return
     
-    do i=1,net%n_spec
-
-       iw = net%iwinvne(i)
-       ir = net%irauscher(i)
-
-       if (net%use_rauscher_ptf .and. ir > 0) then
-
-          ! Rauscher spin + Rauscher PF
-          call get_stat_weight_rauscher(t9, ir, g(i))
-       else
-
-          ! WinVNE fallback
-          call get_stat_weight_winvne(t9, iw, g(i))
-
-       endif
-
-    enddo
 
   end subroutine calc_ptf_nse
+
+  subroutine get_fallback_stat_weight(net, i, t9, g)
+
+    use module_nuclear_data_winvne, only: get_stat_weight_winvne
+    use module_ptf_rauscher, only: get_stat_weight_rauscher
+    use module_stat_weight_policy, only: &
+         STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
+
+    type(nse_network_t), intent(in) :: net
+    integer, intent(in) :: i
+    real(8), intent(in) :: t9
+    real(8), intent(out) :: g
+
+    select case (net%stat_weight_policy%fallback)
+
+    case (STAT_WEIGHT_WINVNE)
+
+       if (net%iwinvne(i) <= 0) then
+          write(*,*) "ERROR: WinVNE statistical weight unavailable for ", &
+               net%name_nucl(i)
+          error stop
+       endif
+
+       call get_stat_weight_winvne(t9, net%iwinvne(i), g)
+
+    case (STAT_WEIGHT_RAUSCHER)
+
+       if (net%irauscher(i) <= 0) then
+          write(*,*) "ERROR: Rauscher statistical weight unavailable for ", &
+               net%name_nucl(i)
+          error stop
+       endif
+
+       call get_stat_weight_rauscher(t9, net%irauscher(i), g)
+
+    case (STAT_WEIGHT_NONE)
+
+       write(*,*) "ERROR: no statistical-weight source for ", &
+            net%name_nucl(i)
+       error stop
+
+    case default
+
+       write(*,*) "ERROR: invalid fallback statistical-weight source"
+       error stop
+
+    end select
+
+  end subroutine get_fallback_stat_weight
+
 
   subroutine calc_coulomb_HS(net, rho, ye, fcoul)
 
@@ -1136,6 +1226,13 @@ contains
     enddo
     stat%abar = 1d0/ytot
     
+    stat%yn = 0d0
+    stat%yp = 0d0
+    stat%yh2 = 0d0
+    stat%yh3 = 0d0
+    stat%yhe3 = 0d0
+    stat%yhe4 = 0d0
+   
     z_heavy = 0.d0
     a_heavy = 0.d0
     y_heavy = 0.d0
