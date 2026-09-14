@@ -275,8 +275,8 @@ contains
 
   subroutine calc_ptf_nse(net, t9, g)
 
-    use module_nuclear_data_winvne
-    use module_ptf_rauscher
+    use module_nuclear_data_winvne, only: get_stat_weight_winvne
+    use module_ptf_rauscher, only: get_stat_weight_rauscher
 
     type(nse_network_t), intent(in) :: net
     real(8),intent(in)  :: t9
@@ -296,16 +296,11 @@ contains
        if (net%use_rauscher_ptf .and. ir > 0) then
 
           ! Rauscher spin + Rauscher PF
-          call get_ptf_rauscher(t9,ir,pf)
-
-          g(i) = (2d0*spin_rauscher(ir) + 1d0)*pf
-
+          call get_stat_weight_rauscher(t9, ir, g(i))
        else
 
           ! WinVNE fallback
-          call get_ptf_winvne(t9,iw,pf)
-
-          g(i) = (2d0*spn_winvne(iw) + 1d0)*pf
+          call get_stat_weight_winvne(t9, iw, g(i))
 
        endif
 

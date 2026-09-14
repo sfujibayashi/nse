@@ -189,6 +189,21 @@ contains
 
   end subroutine get_ptf_rauscher
 
+  subroutine get_stat_weight_rauscher(t9, k, g)
+    
+    real(8), intent(in)  :: t9
+    integer, intent(in)  :: k
+    real(8), intent(out) :: g
+    
+    real(8) :: pf
+    
+    call get_ptf_rauscher(t9, k, pf)
+    
+    g = (2d0*spin_rauscher(k) + 1d0)*pf
+    
+  end subroutine get_stat_weight_rauscher
+
+
   ! subroutine get_ptf_rauscher(t9, k, pf)
   !   real(8),intent(in) :: t9
   !   integer,intent(in) :: k

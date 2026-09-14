@@ -126,6 +126,20 @@ contains
     
   end subroutine get_ptf_winvne
 
+  subroutine get_stat_weight_winvne(t9, k, g)
+    
+    real(8), intent(in)  :: t9
+    integer, intent(in)  :: k
+    real(8), intent(out) :: g
+    
+    real(8) :: pf
+    
+    call get_ptf_winvne(t9, k, pf)
+    
+    g = (2d0*spn_winvne(k) + 1d0)*pf
+    
+  end subroutine get_stat_weight_winvne
+  
   subroutine calc_ptf_winvne(t9,g)
     real(8),intent(in) :: t9
     real(8),intent(out) :: g(nct_winvne)
