@@ -49,7 +49,7 @@ program nse_aprox21
   allocate(xnse_aprox21(net_aprox21%n_spec))
   allocate(xnse(net%n_spec))
 
-  call calc_nse(net_aprox21,rho,temp,ye,itrlim,tol,xnse_aprox21,nsefail,use_TNAguess)
+  call calc_nse(net_aprox21,rho,temp,ye,itrlim,tol,xnse_aprox21,nsefail,.true.)
   if(nsefail)then
      write(6,*) "NSE does not converge in aprox21"
   endif

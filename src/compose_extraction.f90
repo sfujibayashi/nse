@@ -8,7 +8,7 @@ program extraction
   integer,parameter :: itrlim = 300
   real(8),parameter :: tol = 1d-10
 
-  real(8),allocatable :: xnse(:)
+  real(8),allocatable :: xnse(:), xnse_aprox21(:)
 
   logical :: nsefail, use_TNAguess
   
@@ -20,12 +20,12 @@ program extraction
   
   character(256) :: fn_out, fn_points
 
-  type(stat_t) :: stat
+  type(stat_t) :: stat, stat_aprox21
   integer :: iyq_target, it_target
 
   real(8) :: eps, pres, cs2, entr
 
-  type(nse_network_t) :: net
+  type(nse_network_t) :: net, net_aprox21
 
   iyq_target = 19
   it_target = 15
@@ -51,11 +51,13 @@ program extraction
     call init_ptf_reaclib(fn_winv)
     call init_ptf_rauscher(fn_raucher)
     call nse_init_reaclib(net, use_rauscher_ptf)
+    call nse_init_aprox21(net_aprox21, use_rauscher_ptf)
 
     call init_eos(fn_helm)
   end block
 
   allocate(xnse(net%n_spec))
+  allocate(xnse_aprox21(net_aprox21%n_spec))
   
   block
     use const, only: mu, mev2erg, mnmev, mumev
@@ -71,16 +73,18 @@ program extraction
     real(8) :: yn, yp, yh2, yh3, yhe3, yhe4
     real(8) :: q7, E_Comp_MeV
 
-    integer :: unit_com, unit_nse
+    integer :: unit_com, unit_nse, unit_a21
 
     real(8) :: eps_helm, pres_helm, cs2_helm, entr_helm, E_helm_MeV
     real(8) :: mres_Comp, Fcoul_Comp
 
     open(newunit=unit_com, file="compose.dat", status="replace", action="write")
     open(newunit=unit_nse, file="nse.dat", status="replace", action="write")
+    open(newunit=unit_a21, file="nse_aprox21.dat", status="replace", action="write")
     
     write(unit_com,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc/b(with helm)", "Ecoul/b"
     write(unit_nse,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc/b", "Ecoul/b", "s/k"
+    write(unit_a21,'("#",99a20)') "rho", "temp", "ye",  "A_N", "Z_N", "Y_N", "Abar", "Yn", "Yp", "Yh2", "Yh3", "Yhe3", "Yhe4", "E/b(MeV)", "mexc/b", "Ecoul/b", "s/k"
     
     ! read CompOSE h5 file
     open(newunit=unit, file=trim(fn_points), status="old", action="read")
@@ -111,7 +115,8 @@ program extraction
           stop
        endif
 
-       if (mod(iyq-1,4)>0) cycle
+       ! if (mod(iyq-1,4)>0) cycle
+       if (iyq/=1.and.iyq/=9.and.iyq/=19.and.iyq/=29.and.iyq/=39.and.iyq/=49.and.iyq/=59) cycle
        if (mod(inb-1,5)>0) cycle
        if (mod(it-1,1)>0) cycle
        !if (iyq /= iyq_target) cycle
@@ -132,13 +137,32 @@ program extraction
        Fcoul_Comp = y_n*fcoulomb_HS(rho, ye, z_n, a_n, net%n0_fm)
        
        call calc_nse(net,rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess)
+       if(nsefail)then
+          write(6,*) "fail in large NSE"
+          error stop
+       endif
+
+       call calc_nse(net_aprox21,rho,temp,ye,itrlim,tol,xnse_aprox21,nsefail,use_TNAguess)
+       if(nsefail)then
+          call calc_nse(net_aprox21,rho,temp,ye,itrlim,tol,xnse_aprox21,nsefail,.true.)
+       endif
+       if(nsefail)then
+          write(6,*) "fail in aprox21"
+          error stop
+       endif
        call statistic_compose(net, rho, xnse, stat)
+       call statistic_compose(net_aprox21, rho, xnse_aprox21, stat_aprox21)
        write(unit_com,'(" ",99es20.11e3)') rho, temp, ye,  a_n, z_n, y_n, abar, yn, yp, yh2, yh3, yhe3, yhe4, E_Comp_MeV, mres_Comp, Fcoul_Comp
        
        call eos_all(rho, temp, ye, 1d0/stat%abar, stat%mexc, &
             eps, pres, cs2, entr)
             
        write(unit_nse,'(" ",99es20.11e3)') rho, temp, ye, stat%a_n, stat%z_n, stat%y_n, stat%abar, stat%yn, stat%yp, stat%yh2, stat%yh3, stat%yhe3, stat%yhe4, E_helm_MeV, stat%mexc, stat%ecoul, entr
+
+       call eos_all(rho, temp, ye, 1d0/stat_aprox21%abar, stat_aprox21%mexc, &
+            eps, pres, cs2, entr)
+            
+       write(unit_a21,'(" ",99es20.11e3)') rho, temp, ye, stat_aprox21%a_n, stat_aprox21%z_n, stat_aprox21%y_n, stat_aprox21%abar, stat_aprox21%yn, stat_aprox21%yp, stat_aprox21%yh2, stat_aprox21%yh3, stat_aprox21%yhe3, stat_aprox21%yhe4, E_helm_MeV, stat_aprox21%mexc, stat_aprox21%ecoul, entr
        
        write(6,*) inb,temp,rho,yq
 
