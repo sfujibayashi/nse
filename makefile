@@ -14,7 +14,7 @@ FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=i
 
 .SUFFIXES: .f90 .F90 .o
 
-MOD :=  module_nuclear_data_winvne.f90 module_ptf_rauscher.f90 const_mod.f90 module_nse.f90 module_eos_helmholtz.f90
+MOD :=  module_nuclear_data_winvne.f90 module_ptf_rauscher.f90 const_mod.f90 module_stat_weight_policy.f90 module_nse.f90 module_eos_helmholtz.f90
 SRC :=  locate.f90 polint.f90 index_rank.f90
 # SRC += nse_single.f90
 # SRC += nse_aprox21.f90
