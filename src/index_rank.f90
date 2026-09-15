@@ -7,7 +7,7 @@ subroutine index_rank(n_rank, n_arr, array_in, index_out, fac)
 
   real(8) :: array(n_arr)
   
-  integer :: i, irank, irank_prim, ind
+  integer :: i, irank, irank_prim
   integer :: index_buf(n_rank)
   real(8) :: rank_val(n_rank)
   

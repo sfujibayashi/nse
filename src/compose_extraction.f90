@@ -15,12 +15,6 @@ program extraction
 
   logical :: nsefail, use_TNAguess
   
-  real(8) :: mexc_ave, z_heavy, a_heavy, y_heavy, ytot, xsum, yesum, x_heavy
-
-  integer,parameter :: n_rank = 10
-  integer :: index_r(n_rank)
-  integer :: i
-  
   character(256) :: fn_out, fn_points
 
   type(stat_t) :: stat, stat_aprox21
