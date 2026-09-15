@@ -37,6 +37,7 @@ contains
     open(newunit=iu, file=trim(fn), &
          status="old", action="read", &
          form="unformatted", access="stream", &
+         convert="little_endian", &
          iostat=ios)
 
     if (ios /= 0) then
