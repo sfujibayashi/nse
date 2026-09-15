@@ -42,8 +42,8 @@ module module_nse
     
     character(5), allocatable :: name_nucl(:)
     
-    integer, allocatable :: iwinvne(:)
-    integer, allocatable :: irauscher(:)
+    ! integer, allocatable :: iwinvne(:)
+    ! integer, allocatable :: irauscher(:)
     
     logical :: use_winvne = .false.
     
@@ -100,6 +100,10 @@ contains
 
     integer :: i, j, iw, ir
 
+    integer, allocatable :: iwinvne(:), irauscher(:)
+    
+    allocate(iwinvne(ns), irauscher(ns))
+    
     net%n_spec = ns
     net%use_winvne = .true.
 
@@ -111,23 +115,20 @@ contains
     net%stat_weight_policy = stat_weight_policy
 
 
-    allocate(net%iwinvne(ns), net%irauscher(ns))
+    ! allocate(net%iwinvne(ns), net%irauscher(ns))
     allocate(net%name_nucl(ns))
     allocate(net%mexc(ns), net%a(ns), net%z(ns), net%n(ns), &
          net%g0(ns), net%zai(ns))
 
     do i = 1, ns
 
-       iw = find_winvne_index(aa(i), zz(i))
-       ir = find_rauscher_index(aa(i), zz(i))
+       iwinvne(i) = find_winvne_index(aa(i), zz(i))
+       irauscher(i) = find_rauscher_index(aa(i), zz(i))
 
        if (iw <= 0) then
           write(*,*) "ERROR: aprox21 nucleus missing from WinVNE:", aa(i), zz(i)
           stop
        endif
-       
-       net%iwinvne(i)  = iw
-       net%irauscher(i) = ir
 
        net%a(i) = ams_winvne(iw)
        net%z(i) = dble(npt_winvne(iw))
@@ -140,7 +141,10 @@ contains
 
     net%zai(:) = net%z(:)/net%a(:)
 
-    call resolve_network_stat_weights(net)
+    call resolve_network_stat_weights( &
+         net, iwinvne, irauscher)
+    
+    deallocate(iwinvne, irauscher)
 
   end subroutine nse_init_aprox21
 
@@ -155,6 +159,8 @@ contains
 
     integer :: i, j, k
     integer,allocatable :: jrauscher(:)
+
+    integer, allocatable :: iwinvne(:), irauscher(:)
 
     if (.not. valid_stat_weight_policy(stat_weight_policy)) then
        write(*,*) "ERROR: invalid statistical-weight policy"
@@ -199,8 +205,9 @@ contains
     write(6,'(a,i6)') "NSE species kept         = ", net%n_spec
 
 
-    allocate(net%iwinvne(net%n_spec))
-    allocate(net%irauscher(net%n_spec))
+    ! allocate(net%iwinvne(net%n_spec))
+    ! allocate(net%irauscher(net%n_spec))
+    allocate(iwinvne(net%n_spec), irauscher(net%n_spec))
 
     allocate(net%name_nucl(net%n_spec))
     allocate(net%mexc(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), &
@@ -217,9 +224,9 @@ contains
        if (jrauscher(k) > 0 .or. npt_winvne(k) < 87) then
 
           i = i + 1
-
-          net%iwinvne(i)  = k
-          net%irauscher(i) = jrauscher(k)
+          
+          iwinvne(i)  = k
+          irauscher(i) = jrauscher(k)
 
           net%a(i) = ams_winvne(k)
           net%z(i) = dble(npt_winvne(k))
@@ -243,7 +250,8 @@ contains
 
     deallocate(jrauscher)
 
-    call resolve_network_stat_weights(net)
+    call resolve_network_stat_weights( &
+         net, iwinvne, irauscher)
 
   end subroutine nse_init_winvne
 
@@ -319,54 +327,54 @@ contains
 
   end subroutine calc_ptf_nse
 
-  subroutine get_fallback_stat_weight(net, i, t9, g)
+  ! subroutine get_fallback_stat_weight(net, i, t9, g)
 
-    use module_nuclear_data_winvne, only: get_stat_weight_winvne
-    use module_ptf_rauscher, only: get_stat_weight_rauscher
-    use module_stat_weight_policy, only: &
-         STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
+  !   use module_nuclear_data_winvne, only: get_stat_weight_winvne
+  !   use module_ptf_rauscher, only: get_stat_weight_rauscher
+  !   use module_stat_weight_policy, only: &
+  !        STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
 
-    type(nse_network_t), intent(in) :: net
-    integer, intent(in) :: i
-    real(8), intent(in) :: t9
-    real(8), intent(out) :: g
+  !   type(nse_network_t), intent(in) :: net
+  !   integer, intent(in) :: i
+  !   real(8), intent(in) :: t9
+  !   real(8), intent(out) :: g
 
-    select case (net%stat_weight_policy%fallback)
+  !   select case (net%stat_weight_policy%fallback)
 
-    case (STAT_WEIGHT_WINVNE)
+  !   case (STAT_WEIGHT_WINVNE)
 
-       if (net%iwinvne(i) <= 0) then
-          write(*,*) "ERROR: WinVNE statistical weight unavailable for ", &
-               net%name_nucl(i)
-          error stop
-       endif
+  !      if (net%iwinvne(i) <= 0) then
+  !         write(*,*) "ERROR: WinVNE statistical weight unavailable for ", &
+  !              net%name_nucl(i)
+  !         error stop
+  !      endif
 
-       call get_stat_weight_winvne(t9, net%iwinvne(i), g)
+  !      call get_stat_weight_winvne(t9, net%iwinvne(i), g)
 
-    case (STAT_WEIGHT_RAUSCHER)
+  !   case (STAT_WEIGHT_RAUSCHER)
 
-       if (net%irauscher(i) <= 0) then
-          write(*,*) "ERROR: Rauscher statistical weight unavailable for ", &
-               net%name_nucl(i)
-          error stop
-       endif
+  !      if (net%irauscher(i) <= 0) then
+  !         write(*,*) "ERROR: Rauscher statistical weight unavailable for ", &
+  !              net%name_nucl(i)
+  !         error stop
+  !      endif
 
-       call get_stat_weight_rauscher(t9, net%irauscher(i), g)
+  !      call get_stat_weight_rauscher(t9, net%irauscher(i), g)
 
-    case (STAT_WEIGHT_NONE)
+  !   case (STAT_WEIGHT_NONE)
 
-       write(*,*) "ERROR: no statistical-weight source for ", &
-            net%name_nucl(i)
-       error stop
+  !      write(*,*) "ERROR: no statistical-weight source for ", &
+  !           net%name_nucl(i)
+  !      error stop
 
-    case default
+  !   case default
 
-       write(*,*) "ERROR: invalid fallback statistical-weight source"
-       error stop
+  !      write(*,*) "ERROR: invalid fallback statistical-weight source"
+  !      error stop
 
-    end select
+  !   end select
 
-  end subroutine get_fallback_stat_weight
+  ! end subroutine get_fallback_stat_weight
 
 
   subroutine calc_coulomb_HS(net, rho, ye, fcoul)
@@ -1351,9 +1359,12 @@ contains
     
   end subroutine calc_coulomb_average
 
-  subroutine resolve_network_stat_weights(net)
-
+  subroutine resolve_network_stat_weights(net, iwinvne, irauscher)
+    
     type(nse_network_t), intent(inout) :: net
+    integer, intent(in) :: iwinvne(net%n_spec)
+    integer, intent(in) :: irauscher(net%n_spec)
+
     integer :: i
 
     allocate(net%stat_weight(net%n_spec))
@@ -1362,8 +1373,8 @@ contains
 
        call resolve_stat_weight_ref( &
             net%stat_weight_policy, &
-            net%iwinvne(i), &
-            net%irauscher(i), &
+            iwinvne(i), &
+            irauscher(i), &
             net%stat_weight(i))
 
        if (net%stat_weight(i)%source == STAT_WEIGHT_NONE) then
