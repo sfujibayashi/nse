@@ -3,6 +3,9 @@ program extraction
   use module_nuclear_data_winvne
   use module_ptf_rauscher
   use module_eos_helmholtz
+  use module_stat_weight_policy, only: &
+       stat_weight_policy_t, &
+       STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
   implicit none
   
   integer,parameter :: itrlim = 300
@@ -27,6 +30,8 @@ program extraction
 
   type(nse_network_t) :: net, net_aprox21
 
+  type(stat_weight_policy_t) :: stat_weight_policy
+
   iyq_target = 19
   it_target = 15
   
@@ -47,11 +52,24 @@ program extraction
     read(10,*);read(10,'(a)') fn_helm
     read(10,*);read(10,'(a)') fn_out
     close(10)
+
+    if (use_rauscher_ptf) then
+
+       stat_weight_policy%primary  = STAT_WEIGHT_RAUSCHER
+       stat_weight_policy%fallback = STAT_WEIGHT_WINVNE
+
+    else
+
+       stat_weight_policy%primary  = STAT_WEIGHT_WINVNE
+       stat_weight_policy%fallback = STAT_WEIGHT_NONE
+
+    endif
+
     
     call init_winvne(fn_winv)
     call init_ptf_rauscher(fn_raucher)
-    call nse_init_winvne(net, use_rauscher_ptf)
-    call nse_init_aprox21(net_aprox21, use_rauscher_ptf)
+    call nse_init_winvne(net, stat_weight_policy)
+    call nse_init_aprox21(net_aprox21, stat_weight_policy)
 
     call init_eos(fn_helm)
   end block
@@ -117,8 +135,8 @@ program extraction
 
        ! if (mod(iyq-1,4)>0) cycle
        if (iyq/=1.and.iyq/=9.and.iyq/=19.and.iyq/=29.and.iyq/=39.and.iyq/=49.and.iyq/=59) cycle
-       if (mod(inb-1,5)>0) cycle
-       if (mod(it-1,1)>0) cycle
+       if (mod(inb-1,10)>0) cycle
+       if (mod(it-1,10)>0) cycle
        !if (iyq /= iyq_target) cycle
        !if (it  /= it_target)  cycle
        !if (rho > 1d14)cycle
