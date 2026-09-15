@@ -258,7 +258,7 @@ contains
     
     real(8) :: a, z, n, mexc
     
-    a = dble(naw_winvne(k))
+    a = ams_winvne(k)
     z = dble(npt_winvne(k))
     n = dble(nnt_winvne(k))
     
