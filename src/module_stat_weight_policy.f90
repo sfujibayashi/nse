@@ -6,6 +6,7 @@ module module_stat_weight_policy
   integer, parameter, public :: STAT_WEIGHT_NONE     = 0
   integer, parameter, public :: STAT_WEIGHT_WINVNE   = 1
   integer, parameter, public :: STAT_WEIGHT_RAUSCHER = 2
+  integer, parameter, public :: STAT_WEIGHT_HS       = 3
 
   type, public :: stat_weight_policy_t
      integer :: primary  = STAT_WEIGHT_RAUSCHER
@@ -39,6 +40,9 @@ contains
     case (STAT_WEIGHT_RAUSCHER)
        name = "rauscher"
 
+    case (STAT_WEIGHT_HS)
+       name = "HS"
+
     case default
        name = "unknown"
 
@@ -54,14 +58,14 @@ contains
     valid_stat_weight_policy = .false.
 
     select case (policy%primary)
-    case (STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER)
+    case (STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, STAT_WEIGHT_HS)
        continue
     case default
        return
     end select
 
     select case (policy%fallback)
-    case (STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER)
+    case (STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, STAT_WEIGHT_HS)
        continue
     case default
        return
@@ -113,6 +117,11 @@ contains
           ref%source = STAT_WEIGHT_RAUSCHER
           ref%index  = irauscher
        endif
+
+    case (STAT_WEIGHT_HS)
+       
+       ref%source = STAT_WEIGHT_HS
+       ref%index  = 0
 
     case (STAT_WEIGHT_NONE)
 

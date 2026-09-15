@@ -1,13 +1,13 @@
 module module_nse
   use module_stat_weight_policy, only: stat_weight_policy_t, stat_weight_ref_t, resolve_stat_weight_ref, &
-       STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, &
+       STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, STAT_WEIGHT_HS, &
        valid_stat_weight_policy
 
   implicit none
 
   private
   public :: nse_init_four,nse_init_aprox21,nse_init_winvne
-  public :: calc_nse,test_converge,output_composition,statistic,statistic_compose, two_nuclei_approx, calc_ptf_HS
+  public :: calc_nse,test_converge,output_composition,statistic,statistic_compose, two_nuclei_approx
 
   public :: output_nse_full
   public :: fcoulomb_HS
@@ -284,6 +284,7 @@ contains
     use module_ptf_rauscher, only: get_stat_weight_rauscher
     use module_stat_weight_policy, only: &
          STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
+    use module_stat_weight_HS, only: get_stat_weight_HS
 
     type(nse_network_t), intent(in) :: net
     real(8),intent(in)  :: t9
@@ -304,6 +305,11 @@ contains
           
           call get_stat_weight_rauscher( &
                t9, net%stat_weight(i)%index, g(i))
+
+       case (STAT_WEIGHT_HS)
+          
+          call get_stat_weight_HS( &
+               t9, net%a(i), net%z(i), net%n(i), net%mexc(i), g(i))
           
        case default
           
@@ -314,10 +320,6 @@ contains
        end select
 
     enddo
-
-    !call calc_ptf_HS(t9,g)
-    !return
-    
 
   end subroutine calc_ptf_nse
 
@@ -374,109 +376,6 @@ contains
     
   end function fcoulomb_HS
   
-  ! ! coulomb correction in Hempel+2010 Eq.(6)
-  ! function Ecoul_HS10_eq6(z, a, n0, ne) result(ecoul)
-  !   use const, only : pi, fine
-  !   real(8),intent(in) :: z,a,n0,ne
-  !   real(8) :: ecoul
-  !   real(8) :: x,r
-
-  !   x = (ne/n0 * a/z)**(1d0/3d0)
-  !   r = ((3d0*a)/(4d0*pi*n0))**(1d0/3d0)
-  !   ecoul = -3d0/5d0 * z*z*fine*hbar*clight/r*(3d0/2d0*x - 1d0/2d0*x*x*x) 
-    
-  ! end function Ecoul_HS10_eq6
-
-  ! partition function used in HS-type EOS (Fai-Randrup)
-  subroutine calc_ptf_HS(net,t9,g)
-    use const, only : mev2k, mpmev, mnmev, mumev, pi
-    
-    type(nse_network_t),intent(in) :: net
-    real(8),intent(in)  :: t9
-    real(8),intent(out) :: g(net%n_spec)
-
-    real(8),parameter :: c1 = 0.2d0
-    real(8),parameter :: c2 = 0.8d0
-
-    real(8) :: temp_mev
-    real(8) :: aa, emax, bind, g0, iexc
-    integer :: k, ia
-
-    ! T9 -> MeV
-    temp_mev = t9*1d9/mev2k
-
-    do k=1,net%n_spec
-
-       ia = nint(net%a(k))
-
-       ! free neutron / proton:
-       ! spin degeneracy = 2, no nuclear excited states
-       if (ia == 1) then
-          g(k) = 2d0
-          cycle
-       endif
-
-       ! Fai-Randrup / HS ground-state prescription
-       if (mod(ia,2) == 0) then
-          g0 = 1d0
-       else
-          g0 = 2d0
-       endif
-
-       if (ia == 2 .and. nint(net%z(k)) == 1) then
-          g0 = 3.d0
-       endif
-       
-       ! Total nuclear binding energy [MeV]
-       !
-       ! mexc is the bare-nuclear mass excess:
-       ! M_nuc c^2 = A m_u c^2 + mexc
-       bind = net%z(k)*mpmev + net%n(k)*mnmev &
-            - (net%a(k)*mumev + net%mexc(k))
-
-       emax = max(bind,0d0)
-
-       if (temp_mev <= 0d0 .or. emax <= 0d0) then
-          g(k) = g0
-          cycle
-       endif
-
-       ! level-density parameter [MeV^-1]
-       aa = net%a(k)/8d0 * (1d0 - c2*net%a(k)**(-1d0/3d0))
-
-       iexc = excited_HS(temp_mev,aa,emax)
-
-       g(k) = g0 + c1/net%a(k)**(5d0/3d0)*iexc
-
-    enddo
-
-  contains
-
-    function excited_HS(temp,aa,emax) result(val)
-
-      real(8),intent(in) :: temp,aa,emax
-      real(8) :: val
-
-      real(8) :: cc,s0,s1
-
-      cc = temp*sqrt(aa/2d0)
-
-      s0 = -sqrt(aa*temp/2d0)
-      s1 = (sqrt(emax)-cc)/sqrt(temp)
-
-      val = exp(aa*temp/2d0) * &
-           ( cc*sqrt(pi*temp)*(erf(s1)-erf(s0)) &
-           + temp*(exp(-s0*s0)-exp(-s1*s1)) )
-
-    end function excited_HS
-
-  end subroutine calc_ptf_HS
-
-  ! function excited_HS10(temp, a) result g
-  !   real(8),intent(in) :: temp, a
-  !   real(8),parameter :: c1=0.2, c2=0.8
-    
-  ! end function excited_HS10
   
   integer function find_nucleus(net, ia, iz) result(idx)
     type(nse_network_t), intent(in) :: net
