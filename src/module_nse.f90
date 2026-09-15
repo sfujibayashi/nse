@@ -143,19 +143,23 @@ contains
 
   end subroutine nse_init_aprox21
 
-  subroutine nse_init_winvne(net, stat_weight_policy)
+  subroutine nse_init_winvne(net, stat_weight_policy, species_policy)
 
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: find_rauscher_index
     use const, only: memev
+    use module_nse_species_policy
     
     type(nse_network_t),intent(out) :: net
     type(stat_weight_policy_t), intent(in) :: stat_weight_policy
+    type(nse_species_policy_t), intent(in) :: species_policy
 
     integer :: i, k
     integer,allocatable :: jrauscher(:)
 
     integer, allocatable :: iwinvne(:), irauscher(:)
+    logical, allocatable :: keep(:)
+
 
     if (.not. valid_stat_weight_policy(stat_weight_policy)) then
        write(*,*) "ERROR: invalid statistical-weight policy"
@@ -166,6 +170,9 @@ contains
 
     allocate(jrauscher(nct_winvne))
     jrauscher(:) = 0
+
+    allocate(keep(nct_winvne))
+    keep(:) = .false.
     
     ! ---------------------------------------------------------
     ! WinVNE index -> Rauscher index
@@ -174,7 +181,11 @@ contains
     do k=1,nct_winvne
 
        jrauscher(k) = find_rauscher_index(naw_winvne(k), npt_winvne(k))
-
+       keep(k) = keep_nse_species( &
+            species_policy, &
+            npt_winvne(k), &
+            jrauscher(k) > 0)
+       
     enddo
 
     ! ---------------------------------------------------------
@@ -186,16 +197,16 @@ contains
     !   Rauscher-missing nuclei with Z >= 87
     ! ---------------------------------------------------------
 
-    net%n_spec = count((jrauscher > 0) .or. (npt_winvne < 87))
+    net%n_spec = count(keep)
 
     write(6,'(a,i6)') "Rauscher matched species = ", &
          count(jrauscher > 0)
 
     write(6,'(a,i6)') "WinVNE PF fallback       = ", &
-         count((jrauscher == 0) .and. (npt_winvne < 87))
+         count(keep)
 
     write(6,'(a,i6)') "Excluded species         = ", &
-         count((jrauscher == 0) .and. (npt_winvne >= 87))
+         count(.not.keep)
 
     write(6,'(a,i6)') "NSE species kept         = ", net%n_spec
 
@@ -214,21 +225,19 @@ contains
 
     do k=1,nct_winvne
 
-       if (jrauscher(k) > 0 .or. npt_winvne(k) < 87) then
+       if(.not. keep(k)) cycle
 
-          i = i + 1
-          
-          iwinvne(i)  = k
-          irauscher(i) = jrauscher(k)
-
-          net%a(i) = ams_winvne(k)
-          net%z(i) = dble(npt_winvne(k))
-          net%n(i) = dble(nnt_winvne(k))
-
-          net%mexc(i) = exc_winvne(k) - net%z(i)*memev
-          net%name_nucl(i) = name_winvne(k)
-
-       endif
+       i = i + 1
+       
+       iwinvne(i)  = k
+       irauscher(i) = jrauscher(k)
+       
+       net%a(i) = ams_winvne(k)
+       net%z(i) = dble(npt_winvne(k))
+       net%n(i) = dble(nnt_winvne(k))
+       
+       net%mexc(i) = exc_winvne(k) - net%z(i)*memev
+       net%name_nucl(i) = name_winvne(k)
 
     enddo
 

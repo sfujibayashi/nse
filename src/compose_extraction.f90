@@ -6,6 +6,8 @@ program extraction
   use module_stat_weight_policy, only: &
        stat_weight_policy_t, &
        STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
+  use module_nse_species_policy
+  
   implicit none
   
   integer,parameter :: itrlim = 300
@@ -25,6 +27,7 @@ program extraction
   type(nse_network_t) :: net, net_aprox21
 
   type(stat_weight_policy_t) :: stat_weight_policy
+  type(nse_species_policy_t) :: species_policy
 
   iyq_target = 19
   it_target = 15
@@ -62,7 +65,7 @@ program extraction
     
     call init_winvne(fn_winv)
     call init_ptf_rauscher(fn_raucher)
-    call nse_init_winvne(net, stat_weight_policy)
+    call nse_init_winvne(net, stat_weight_policy, species_policy)
     call nse_init_aprox21(net_aprox21, stat_weight_policy)
 
     call init_eos(fn_helm)
