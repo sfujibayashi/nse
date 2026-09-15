@@ -98,7 +98,7 @@ contains
          0, 1, 2, 2,  6,  7,  8, 10, 12, 14, &
          16,18,20,22,24,24,26,26,26,28 ]
 
-    integer :: i, j, iw, ir
+    integer :: i, j
 
     integer, allocatable :: iwinvne(:), irauscher(:)
     
@@ -125,17 +125,17 @@ contains
        iwinvne(i) = find_winvne_index(aa(i), zz(i))
        irauscher(i) = find_rauscher_index(aa(i), zz(i))
 
-       if (iw <= 0) then
+       if (iwinvne(i) <= 0) then
           write(*,*) "ERROR: aprox21 nucleus missing from WinVNE:", aa(i), zz(i)
           stop
        endif
 
-       net%a(i) = ams_winvne(iw)
-       net%z(i) = dble(npt_winvne(iw))
-       net%n(i) = dble(nnt_winvne(iw))
+       net%a(i) = ams_winvne(iwinvne(i))
+       net%z(i) = dble(npt_winvne(iwinvne(i)))
+       net%n(i) = dble(nnt_winvne(iwinvne(i)))
 
-       net%mexc(i) = exc_winvne(iw) - net%z(i)*memev
-       net%name_nucl(i) = name_winvne(iw)
+       net%mexc(i) = exc_winvne(iwinvne(i)) - net%z(i)*memev
+       net%name_nucl(i) = name_winvne(iwinvne(i))
 
     enddo
 
