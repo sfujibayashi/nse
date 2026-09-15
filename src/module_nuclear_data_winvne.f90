@@ -231,4 +231,22 @@ contains
 
   end subroutine output_reduced_table
 
+  integer function find_winvne_index(ia, iz) result(idx)
+    
+    integer, intent(in) :: ia, iz
+    
+    idx = 0
+    
+    if (.not. allocated(jnuc_winvne)) return
+    
+    if (ia < lbound(jnuc_winvne,1) .or. &
+         ia > ubound(jnuc_winvne,1)) return
+    
+    if (iz < lbound(jnuc_winvne,2) .or. &
+         iz > ubound(jnuc_winvne,2)) return
+    
+    idx = jnuc_winvne(ia, iz)
+    
+  end function find_winvne_index
+
 end module module_nuclear_data_winvne

@@ -234,5 +234,22 @@ contains
     
   ! end subroutine get_ptf_rauscher
 
-
+  integer function find_rauscher_index(ia, iz) result(idx)
+    
+    integer, intent(in) :: ia, iz
+    
+    idx = 0
+    
+    if (.not. allocated(jnuc_rauscher)) return
+    
+    if (ia < lbound(jnuc_rauscher,1) .or. &
+         ia > ubound(jnuc_rauscher,1)) return
+    
+    if (iz < lbound(jnuc_rauscher,2) .or. &
+         iz > ubound(jnuc_rauscher,2)) return
+    
+    idx = jnuc_rauscher(ia, iz)
+    
+  end function find_rauscher_index
+  
 end module module_ptf_rauscher

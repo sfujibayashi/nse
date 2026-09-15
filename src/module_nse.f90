@@ -83,7 +83,7 @@ contains
   subroutine nse_init_aprox21(net, stat_weight_policy)
 
     use module_nuclear_data_winvne
-    use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
+    use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher, find_rauscher_index
     use const, only: memev
 
     type(nse_network_t), intent(out) :: net
@@ -117,22 +117,19 @@ contains
 
     do i = 1, ns
 
-       iw = jnuc_winvne(aa(i), zz(i))
+       iw = find_winvne_index(aa(i), zz(i))
+       ir = find_rauscher_index(aa(i), zz(i))
 
        if (iw <= 0) then
           write(*,*) "ERROR: aprox21 nucleus missing from WinVNE:", aa(i), zz(i)
           stop
        endif
 
-       ir = 0
-       do j = 1, nct_rauscher
-          if (z_rauscher(j) == zz(i) .and. &
-               a_rauscher(j) == aa(i)) then
-             ir = j
-             exit
-          endif
-       enddo
-
+       if (ir <= 0) then
+          write(*,*) "ERROR: aprox21 nucleus missing from Rauscher's table:", aa(i), zz(i)
+          stop
+       endif
+       
        net%iwinvne(i)  = iw
        net%irauscher(i) = ir
 
@@ -152,7 +149,7 @@ contains
   subroutine nse_init_winvne(net, stat_weight_policy)
 
     use module_nuclear_data_winvne
-    use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher
+    use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher, find_rauscher_index
     use const, only: memev
     
     type(nse_network_t),intent(out) :: net
@@ -179,13 +176,7 @@ contains
 
        do j=1,nct_rauscher
 
-          if (npt_winvne(k) == z_rauscher(j) .and. &
-               naw_winvne(k) == a_rauscher(j)) then
-             
-             jrauscher(k) = j
-             exit
-
-          endif
+          jrauscher(k) = find_rauscher_index(naw_winvne(k), npt_winvne(k))
 
        enddo
 
