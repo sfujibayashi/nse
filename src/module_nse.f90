@@ -614,6 +614,124 @@ contains
 
   end subroutine calc_nse
 
+  subroutine calc_nse_with_guess(net, rho,temp,ye,itrlim,tol,xnse,nsefail,xn_guess,xp_guess,xn_history,xp_history,itr_out,err_out,xn_out,xp_out)
+    use const,only : mu,kerg,pi,hbar,mev2erg
+    use module_nuclear_data_winvne
+    type(nse_network_t),intent(in) :: net
+    real(8),intent(in) :: rho,temp,ye
+    integer,intent(in) :: itrlim
+    real(8),intent(in) :: tol
+    real(8),intent(out) :: xnse(net%n_spec)
+    logical,intent(out) :: nsefail
+    real(8),intent(in) :: xn_guess,xp_guess
+    real(8),intent(out),optional :: xn_history(0:itrlim),xp_history(0:itrlim)
+    integer,intent(out),optional :: itr_out
+    real(8),intent(out),optional :: err_out
+    real(8),intent(out),optional :: xn_out,xp_out
+    
+    real(8) :: logrho0
+    real(8) :: logge(net%n_spec), logx(net%n_spec), fcoul(net%n_spec), g(net%n_spec)
+    
+    real(8) :: xp,xn
+
+    integer :: itr
+    !integer,parameter :: itrlim=50
+    !    real(8),parameter :: tol = 1d-13
+    
+    real(8) :: dxdp,dxdn,dyedp,dyedn,dx,dye,det,dxn,dxp,dl,fac
+
+    real(8) :: t9
+
+    real(8),parameter :: n0 = 0.16d0*1d39
+    
+    ! log(rho0/rho)
+    logrho0 = 2.5d0*log(mu) + 1.5d0*log(kerg*temp) - 1.5d0*log(2d0*pi) - 3d0*log(hbar) - log(rho)
+    
+    ! partition function may be calculated here
+    t9 = temp/1d9
+    if(net%use_winvne)then
+       call calc_ptf_nse(net, t9,g)
+    else
+       g(:) = net%g0(:)
+    endif
+    
+    if(net%use_winvne)then
+       call calc_coulomb_HS(net, rho, ye, fcoul)
+    else
+       fcoul(:) = 0d0
+    endif
+    !
+    logge(:) = log(g(:)) + 2.5d0*log(net%a(:)) + logrho0 - net%mexc(:)*mev2erg/(kerg*temp) &
+         - fcoul(:)*mev2erg/(kerg*temp)
+    
+    nsefail = .false.
+
+    xn = xn_guess
+    xp = xp_guess
+    
+    if(present(xn_history)) xn_history(0) = xn
+    if(present(xp_history)) xp_history(0) = xp
+    if(present(itr_out))itr_out = 0
+    
+    do itr=1,itrlim
+
+       if(present(xn_history))xn_history(itr) = xn
+       if(present(xp_history))xp_history(itr) = xp
+       if(present(itr_out))itr_out = itr
+
+       call step(net,xn,xp,ye,logge,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp)
+       
+       if(present(err_out))err_out = max(abs(dx), abs(dye))
+
+       
+       !if( (abs(dx)<tol .and. abs(dye) < tol) .or. (abs(dxn/xn)<tol .and. abs(dxp/xp)<tol) ) exit
+       if( abs(dx) < tol .and. abs(dye) < tol ) exit
+       
+       ! if( abs(det)/min(abs(dxdn),abs(dxdp),abs(dyedn),abs(dyedp))<1d-15 .or. logge(1) + xn < -3d2 .or. logge(2) + xp < -3d2 )then
+       !    ! xnse(3) = min(ye,1d0-ye)*2d0
+       !    ! xnse(1) = max(1d-99, 1d0-ye - 0.5d0*xnse(3))
+       !    ! xnse(2) = max(1d-99, ye     - 0.5d0*xnse(3))
+       !    ! if( abs(ye-0.5d0)<1d-16 )then
+       !    !    xnse(1) = 1d-99
+       !    !    xnse(2) = 1d-99
+       !    !    xnse(3) = 1d0
+       !    ! endif
+       !    write(6,*) "not converged"
+       !    nsefail = .true.
+       !    return
+       ! endif
+       
+       dl = sqrt(dxn*dxn+dxp*dxp)
+
+       ! write(6,'(i5,99es15.7)') itr,xn,xp,dx,dye,dxn,dxp,det,dxdn,dxdp,dyedn,dyedp,dl
+       fac = 1d0
+       if(dl>0.5d0*log(10d0))fac = 0.5d0*log(10d0)/dl
+       !if(max(abs(dxn/xn),abs(dxp/xp)) > 0.5d0) fac = 0.5d0/max(abs(dxn/xn),abs(dxp/xp))
+       !write(6,*) xn,xp
+       
+       xn = xn + dxn*fac
+       xp = xp + dxp*fac
+
+       !itr_out = itr
+       if(itr==itrlim)then
+          nsefail = .true.
+       endif
+    enddo
+
+    logx(:) = logge(:) + net%z(:)*xp + net%n(:)*xn
+
+    block
+      real(8) :: logx_max, u(net%n_spec)
+      logx_max = maxval(logx(:))
+      u(:) = exp(logx(:) - logx_max)
+      xnse(:) = u(:) / sum(u(:))
+    end block
+    if(present(xn_out)) xn_out = xn
+    if(present(xp_out)) xp_out = xp
+
+  end subroutine calc_nse
+
+
   subroutine two_nuclei_approx(net,rho,ye,xnse)
     type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,ye
