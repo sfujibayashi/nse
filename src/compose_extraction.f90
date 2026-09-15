@@ -6,6 +6,9 @@ program extraction
   use module_stat_weight_policy, only: &
        stat_weight_policy_t, &
        STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, STAT_WEIGHT_HS
+  use module_nuclear_mass_policy, only: &
+       nuclear_mass_policy_t, &
+       NUCLEAR_MASS_NONE, NUCLEAR_MASS_WINVNE
   use module_nse_species_policy
   
   implicit none
@@ -27,6 +30,7 @@ program extraction
   type(nse_network_t) :: net, net_aprox21
 
   type(stat_weight_policy_t) :: stat_weight_policy
+  type(nuclear_mass_policy_t) :: nuclear_mass_policy
   type(nse_species_policy_t) :: species_policy
 
   iyq_target = 19
@@ -62,6 +66,9 @@ program extraction
 
     endif
 
+    nuclear_mass_policy%primary  = NUCLEAR_MASS_WINVNE
+    nuclear_mass_policy%fallback = NUCLEAR_MASS_NONE
+
     ! species_policy%mode = NSE_SPECIES_ALL_WINVNE
     ! stat_weight_policy%primary  = STAT_WEIGHT_HS
     ! stat_weight_policy%fallback = STAT_WEIGHT_NONE
@@ -69,8 +76,8 @@ program extraction
     
     call init_winvne(fn_winv)
     call init_ptf_rauscher(fn_raucher)
-    call nse_init_winvne(net, stat_weight_policy, species_policy)
-    call nse_init_aprox21(net_aprox21, stat_weight_policy)
+    call nse_init_winvne(net, stat_weight_policy, species_policy, nuclear_mass_policy)
+    call nse_init_aprox21(net_aprox21, stat_weight_policy, nuclear_mass_policy)
 
     call init_eos(fn_helm)
   end block

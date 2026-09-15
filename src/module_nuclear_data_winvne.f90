@@ -249,14 +249,14 @@ contains
     
   end function find_winvne_index
 
-  subroutine get_nuclear_data_winvne(k, mass, bind)
+  subroutine get_nuclear_data_winvne(k, mass, bind, mexc)
     
     use const, only: memev, mumev, mpmev, mnmev
     
     integer, intent(in) :: k
-    real(8), intent(out) :: mass, bind
+    real(8), intent(out) :: mass, bind, mexc
     
-    real(8) :: a, z, n, mexc
+    real(8) :: a, z, n
     
     a = ams_winvne(k)
     z = dble(npt_winvne(k))

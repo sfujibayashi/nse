@@ -1,7 +1,7 @@
 program check_HSmass
   
   use module_nuclear_data_HS
-  use const, only: mpmev, mnmev, mumev
+  use const, only: mpmev, mnmev
   implicit none
   
   integer :: k
@@ -11,10 +11,9 @@ program check_HSmass
   
   k = find_HS_index(56,26)
   
-  call get_nuclear_data_HS(k, mass, bind)
+  call get_nuclear_data_HS(k, mass, bind, mexc)
   
   bind_check = 26d0*mpmev + 30d0*mnmev - mass
-  mexc = mass - 56d0*mumev
   
   write(*,'(a,es24.15)') "mass       = ", mass
   write(*,'(a,es24.15)') "bind       = ", bind

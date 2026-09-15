@@ -117,10 +117,12 @@ contains
   end function find_HS_index
 
 
-  subroutine get_nuclear_data_HS(k, mass, bind)
+  subroutine get_nuclear_data_HS(k, mass, bind, mexc)
+
+    use const, only: mumev
 
     integer, intent(in) :: k
-    real(8), intent(out) :: mass, bind
+    real(8), intent(out) :: mass, bind, mexc
 
     if (k < 1 .or. k > nct_HS) then
        write(*,*) "ERROR: invalid HS nuclear-data index:", k
@@ -129,6 +131,7 @@ contains
 
     mass = mass_HS(k)
     bind = bind_HS(k)
+    mexc = mass - dble(az_HS(k,1))*mumev
 
   end subroutine get_nuclear_data_HS
 

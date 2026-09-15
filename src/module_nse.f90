@@ -91,7 +91,6 @@ contains
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: find_rauscher_index
     use module_nuclear_data_HS
-    use const,only:mnmev,mpmev,mamev,mumev,memev
 
     type(nse_network_t), intent(out) :: net
     type(stat_weight_policy_t),intent(in) :: stat_weight_policy
@@ -108,6 +107,13 @@ contains
     integer :: i
 
     integer, allocatable :: iwinvne(:), irauscher(:), ihs(:)
+
+    if (.not. valid_nuclear_mass_policy(nuclear_mass_policy)) then
+       write(*,*) "ERROR: invalid nuclear-mass policy"
+       error stop
+    endif
+
+    net%nuclear_mass_policy = nuclear_mass_policy
     
     allocate(iwinvne(ns), irauscher(ns), ihs(ns))
     
@@ -124,6 +130,7 @@ contains
     allocate(net%name_nucl(ns))
     allocate(net%mexc(ns), net%mass(ns), net%bind(ns), net%a(ns), net%z(ns), net%n(ns), &
          net%g0(ns), net%zai(ns))
+    allocate(net%nuclear_mass(ns))
 
     do i = 1, ns
 
@@ -143,12 +150,11 @@ contains
        net%z(i) = dble(npt_winvne(iwinvne(i)))
        net%n(i) = dble(nnt_winvne(iwinvne(i)))
 
-       net%mexc(i) = exc_winvne(iwinvne(i)) - net%z(i)*memev
        net%name_nucl(i) = name_winvne(iwinvne(i))
 
     enddo
-    net%mass(:) = net%a(:)*mumev + net%mexc(:)
-    net%bind(:) = net%z(:)*mpmev + net%n(:)*mnmev - net%mass(:)
+
+    call resolve_network_nuclear_masses(net)
 
     net%zai(:) = net%z(:)/net%a(:)
 
@@ -163,7 +169,6 @@ contains
 
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: find_rauscher_index
-    use const,only:mnmev,mpmev,mamev,mumev,memev
     use module_nse_species_policy
     use module_nuclear_data_HS
     
@@ -178,6 +183,13 @@ contains
     integer, allocatable :: iwinvne(:), irauscher(:), ihs(:)
     logical, allocatable :: keep(:)
 
+
+    if (.not. valid_nuclear_mass_policy(nuclear_mass_policy)) then
+       write(*,*) "ERROR: invalid nuclear-mass policy"
+       error stop
+    endif
+
+    net%nuclear_mass_policy = nuclear_mass_policy
 
     if (.not. valid_stat_weight_policy(stat_weight_policy)) then
        write(*,*) "ERROR: invalid statistical-weight policy"
@@ -229,11 +241,12 @@ contains
     write(6,'(a,i6)') "NSE species kept         = ", net%n_spec
 
 
-    allocate(iwinvne(net%n_spec), irauscher(net%n_spec))
+    allocate(iwinvne(net%n_spec), irauscher(net%n_spec), ihs(net%n_spec))
 
     allocate(net%name_nucl(net%n_spec))
     allocate(net%mexc(net%n_spec), net%mass(net%n_spec), net%bind(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), &
          net%g0(net%n_spec), net%zai(net%n_spec))
+    allocate(net%nuclear_mass(net%n_spec))
 
     ! ---------------------------------------------------------
     ! Construct NSE species arrays
@@ -249,7 +262,7 @@ contains
        
        iwinvne(i)  = k
        irauscher(i) = jrauscher(k)
-       ihs(i)     = find_HS_index(aa(i), zz(i))
+       ihs(i)      = find_HS_index(naw_winvne(k), npt_winvne(k))
 
        call resolve_nuclear_mass_ref( &
             nuclear_mass_policy, iwinvne(i), ihs(i), net%nuclear_mass(i))
@@ -258,18 +271,16 @@ contains
        net%z(i) = dble(npt_winvne(k))
        net%n(i) = dble(nnt_winvne(k))
        
-       net%mexc(i) = exc_winvne(k) - net%z(i)*memev
        net%name_nucl(i) = name_winvne(k)
 
     enddo
-    
-    net%mass(:) = net%a(:)*mumev + net%mexc(:)
-    net%bind(:) = net%z(:)*mpmev + net%n(:)*mnmev - net%mass(:)
 
     if (i /= net%n_spec) then
        write(*,*) "ERROR constructing NSE species:", i, net%n_spec
        stop
     endif
+
+    call resolve_network_nuclear_masses(net)
 
     net%zai(:) = net%z(:)/net%a(:)
 
@@ -1351,6 +1362,44 @@ contains
     ecoul_ave = sum(x(:)/net%a(:) * fcoul(:))
     
   end subroutine calc_coulomb_average
+
+  subroutine resolve_network_nuclear_masses(net)
+
+    use module_nuclear_data_winvne, only: get_nuclear_data_winvne
+    use module_nuclear_data_HS, only: get_nuclear_data_HS
+
+    type(nse_network_t), intent(inout) :: net
+
+    integer :: i
+
+    do i = 1, net%n_spec
+
+       select case (net%nuclear_mass(i)%source)
+
+       case (NUCLEAR_MASS_WINVNE)
+
+          call get_nuclear_data_winvne( &
+               net%nuclear_mass(i)%index, &
+               net%mass(i), net%bind(i), net%mexc(i))
+
+       case (NUCLEAR_MASS_HS)
+
+          call get_nuclear_data_HS( &
+               net%nuclear_mass(i)%index, &
+               net%mass(i), net%bind(i), net%mexc(i))
+
+       case default
+
+          write(*,*) "ERROR: no nuclear-mass source for ", &
+               net%name_nucl(i)
+          error stop
+
+       end select
+
+    enddo
+
+  end subroutine resolve_network_nuclear_masses
+
 
   subroutine resolve_network_stat_weights(net, iwinvne, irauscher)
     
