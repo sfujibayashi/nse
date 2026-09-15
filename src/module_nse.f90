@@ -1,5 +1,5 @@
 module module_nse
-  use module_stat_weight_policy, only: stat_weight_policy_t, &
+  use module_stat_weight_policy, only: stat_weight_policy_t, stat_weight_ref_t, resolve_stat_weight_ref, &
        STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, &
        valid_stat_weight_policy
 
@@ -50,6 +50,7 @@ module module_nse
     real(8) :: n0_fm = 0.1583d0
 
     type(stat_weight_policy_t) :: stat_weight_policy
+    type(stat_weight_ref_t), allocatable :: stat_weight(:)
     
  end type nse_network_t
 
@@ -138,6 +139,8 @@ contains
     enddo
 
     net%zai(:) = net%z(:)/net%a(:)
+
+    call resolve_network_stat_weights(net)
 
   end subroutine nse_init_aprox21
 
@@ -240,6 +243,8 @@ contains
 
     deallocate(jrauscher)
 
+    call resolve_network_stat_weights(net)
+
   end subroutine nse_init_winvne
 
 
@@ -282,43 +287,28 @@ contains
     real(8),intent(in)  :: t9
     real(8),intent(out) :: g(net%n_spec)
 
-    integer :: i, ir, iw
+    integer :: i
     
     do i = 1, net%n_spec
 
-       select case (net%stat_weight_policy%primary)
-
-       case (STAT_WEIGHT_RAUSCHER)
-
-          if (net%irauscher(i) > 0) then
-
-             call get_stat_weight_rauscher( &
-                  t9, net%irauscher(i), g(i))
-
-          else
-
-             call get_fallback_stat_weight(net, i, t9, g(i))
-
-          endif
-
+       select case (net%stat_weight(i)%source)
+          
        case (STAT_WEIGHT_WINVNE)
-
-          if (net%iwinvne(i) > 0) then
-
-             call get_stat_weight_winvne( &
-                  t9, net%iwinvne(i), g(i))
-
-          else
-
-             call get_fallback_stat_weight(net, i, t9, g(i))
-
-          endif
-
+          
+          call get_stat_weight_winvne( &
+               t9, net%stat_weight(i)%index, g(i))
+          
+       case (STAT_WEIGHT_RAUSCHER)
+          
+          call get_stat_weight_rauscher( &
+               t9, net%stat_weight(i)%index, g(i))
+          
        case default
-
-          write(*,*) "ERROR: invalid primary statistical-weight source"
+          
+          write(*,*) "ERROR: unresolved statistical weight for ", &
+               net%name_nucl(i)
           error stop
-
+          
        end select
 
     enddo
@@ -1339,6 +1329,7 @@ contains
     t9 = temp/1d9
     call calc_ptf_nse(net,t9,g)
     open(newunit=unit, file=output_filename, status="replace", action="write")
+    write(unit, '("#",a,es15.7,a,es15.7,a,es15.7)') "rho=",rho,"T=",temp,"ye=",ye
     write(unit, '("#",99a20)') "index", "name", "A", "Z", "N", "Xi", "Yi", "gi"
     do i=1,net%n_spec
        write(unit, '(" ",i20,a20,3i20,3es20.10e3)') i, net%name_nucl(i), nint(net%a(i)), nint(net%z(i)), nint(net%n(i)), xnse(i), xnse(i)/net%a(i), g(i)
@@ -1359,5 +1350,30 @@ contains
     ecoul_ave = sum(x(:)/net%a(:) * fcoul(:))
     
   end subroutine calc_coulomb_average
+
+  subroutine resolve_network_stat_weights(net)
+
+    type(nse_network_t), intent(inout) :: net
+    integer :: i
+
+    allocate(net%stat_weight(net%n_spec))
+
+    do i = 1, net%n_spec
+
+       call resolve_stat_weight_ref( &
+            net%stat_weight_policy, &
+            net%iwinvne(i), &
+            net%irauscher(i), &
+            net%stat_weight(i))
+
+       if (net%stat_weight(i)%source == STAT_WEIGHT_NONE) then
+          write(*,*) "ERROR: no statistical-weight source for ", &
+               net%name_nucl(i)
+          error stop
+       endif
+
+    enddo
+
+  end subroutine resolve_network_stat_weights
 
 end module module_nse
