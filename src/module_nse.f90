@@ -2,6 +2,7 @@ module module_nse
   use module_stat_weight_policy, only: stat_weight_policy_t, stat_weight_ref_t, resolve_stat_weight_ref, &
        STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, STAT_WEIGHT_HS, &
        valid_stat_weight_policy
+  use module_nuclear_mass_policy
 
   implicit none
 
@@ -50,6 +51,8 @@ module module_nse
 
     type(stat_weight_policy_t) :: stat_weight_policy
     type(stat_weight_ref_t), allocatable :: stat_weight(:)
+    type(nuclear_mass_policy_t) :: nuclear_mass_policy
+    type(nuclear_mass_ref_t), allocatable :: nuclear_mass(:)
     
  end type nse_network_t
 
@@ -83,14 +86,16 @@ contains
     
   end subroutine nse_init_four
 
-  subroutine nse_init_aprox21(net, stat_weight_policy)
+  subroutine nse_init_aprox21(net, stat_weight_policy, nuclear_mass_policy)
 
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: find_rauscher_index
+    use module_nuclear_data_HS
     use const,only:mnmev,mpmev,mamev,mumev,memev
 
     type(nse_network_t), intent(out) :: net
     type(stat_weight_policy_t),intent(in) :: stat_weight_policy
+    type(nuclear_mass_policy_t), intent(in) :: nuclear_mass_policy
 
     integer, parameter :: ns = 20
     integer, parameter :: aa(ns) = [ &
@@ -102,9 +107,9 @@ contains
 
     integer :: i
 
-    integer, allocatable :: iwinvne(:), irauscher(:)
+    integer, allocatable :: iwinvne(:), irauscher(:), ihs(:)
     
-    allocate(iwinvne(ns), irauscher(ns))
+    allocate(iwinvne(ns), irauscher(ns), ihs(ns))
     
     net%n_spec = ns
     net%use_winvne = .true.
@@ -124,6 +129,10 @@ contains
 
        iwinvne(i) = find_winvne_index(aa(i), zz(i))
        irauscher(i) = find_rauscher_index(aa(i), zz(i))
+       ihs(i)     = find_HS_index(aa(i), zz(i))
+
+       call resolve_nuclear_mass_ref( &
+            nuclear_mass_policy, iwinvne(i), ihs(i), net%nuclear_mass(i))
 
        if (iwinvne(i) <= 0) then
           write(*,*) "ERROR: aprox21 nucleus missing from WinVNE:", aa(i), zz(i)
@@ -146,25 +155,27 @@ contains
     call resolve_network_stat_weights( &
          net, iwinvne, irauscher)
     
-    deallocate(iwinvne, irauscher)
+    deallocate(iwinvne, irauscher, ihs)
 
   end subroutine nse_init_aprox21
 
-  subroutine nse_init_winvne(net, stat_weight_policy, species_policy)
+  subroutine nse_init_winvne(net, stat_weight_policy, species_policy, nuclear_mass_policy)
 
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: find_rauscher_index
     use const,only:mnmev,mpmev,mamev,mumev,memev
     use module_nse_species_policy
+    use module_nuclear_data_HS
     
     type(nse_network_t),intent(out) :: net
     type(stat_weight_policy_t), intent(in) :: stat_weight_policy
     type(nse_species_policy_t), intent(in) :: species_policy
+    type(nuclear_mass_policy_t), intent(in) :: nuclear_mass_policy
 
     integer :: i, k
     integer,allocatable :: jrauscher(:)
 
-    integer, allocatable :: iwinvne(:), irauscher(:)
+    integer, allocatable :: iwinvne(:), irauscher(:), ihs(:)
     logical, allocatable :: keep(:)
 
 
@@ -238,6 +249,10 @@ contains
        
        iwinvne(i)  = k
        irauscher(i) = jrauscher(k)
+       ihs(i)     = find_HS_index(aa(i), zz(i))
+
+       call resolve_nuclear_mass_ref( &
+            nuclear_mass_policy, iwinvne(i), ihs(i), net%nuclear_mass(i))
        
        net%a(i) = ams_winvne(k)
        net%z(i) = dble(npt_winvne(k))
@@ -264,7 +279,7 @@ contains
 
     call resolve_network_stat_weights( &
          net, iwinvne, irauscher)
-    deallocate(iwinvne, irauscher)
+    deallocate(iwinvne, irauscher, ihs)
     
   end subroutine nse_init_winvne
 
