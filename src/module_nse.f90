@@ -124,11 +124,6 @@ contains
           write(*,*) "ERROR: aprox21 nucleus missing from WinVNE:", aa(i), zz(i)
           stop
        endif
-
-       if (ir <= 0) then
-          write(*,*) "ERROR: aprox21 nucleus missing from Rauscher's table:", aa(i), zz(i)
-          stop
-       endif
        
        net%iwinvne(i)  = iw
        net%irauscher(i) = ir
@@ -174,11 +169,7 @@ contains
 
     do k=1,nct_winvne
 
-       do j=1,nct_rauscher
-
-          jrauscher(k) = find_rauscher_index(naw_winvne(k), npt_winvne(k))
-
-       enddo
+       jrauscher(k) = find_rauscher_index(naw_winvne(k), npt_winvne(k))
 
     enddo
 
