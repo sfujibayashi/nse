@@ -21,9 +21,9 @@ SRC :=  locate.f90 polint.f90 index_rank.f90
 # SRC += nse_aprox21.f90
 # SRC += make_nse_table.f90
 # SRC += nse_compose_points.f90
-# SRC += compose_extraction.f90
-MOD := module_nuclear_data_HS.f90
-SRC := check_HSmass.f90
+SRC += compose_extraction.f90
+#MOD := module_nuclear_data_HS.f90
+#SRC := check_HSmass.f90
 
 SRC_DIR := src/
 

@@ -62,9 +62,9 @@ program extraction
 
     endif
 
-    species_policy%mode = NSE_SPECIES_ALL_WINVNE
-    stat_weight_policy%primary  = STAT_WEIGHT_HS
-    stat_weight_policy%fallback = STAT_WEIGHT_NONE
+    ! species_policy%mode = NSE_SPECIES_ALL_WINVNE
+    ! stat_weight_policy%primary  = STAT_WEIGHT_HS
+    ! stat_weight_policy%fallback = STAT_WEIGHT_NONE
     
     
     call init_winvne(fn_winv)
@@ -135,14 +135,14 @@ program extraction
        endif
 
        ! if (mod(iyq-1,4)>0) cycle
-       !if (iyq/=1.and.iyq/=9.and.iyq/=19.and.iyq/=29.and.iyq/=39.and.iyq/=49.and.iyq/=59) cycle
-       !if (mod(inb-1,10)>0) cycle
-       !if (mod(it-1,10)>0) cycle
-       if (iyq /= iyq_target) cycle
-       if (it  /= it_target)  cycle
+       if (iyq/=1.and.iyq/=9.and.iyq/=19.and.iyq/=29.and.iyq/=39.and.iyq/=49.and.iyq/=59) cycle
+       if (mod(inb-1,10)>0) cycle
+       if (mod(it-1,10)>0) cycle
+       !if (iyq /= iyq_target) cycle
+       !if (it  /= it_target)  cycle
        !if (rho > 1d14)cycle
-       !if(temp < 4d9 .or. 1d10 < temp)cycle
-       !if(1d12 < rho)cycle
+       if(temp < 4d9 .or. 1d10 < temp)cycle
+       if(1d12 < rho)cycle
 
        npoint = npoint + 1
        

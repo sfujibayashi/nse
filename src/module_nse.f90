@@ -34,6 +34,8 @@ module module_nse
     integer :: n_spec = 0
     
     real(8), allocatable :: mexc(:)
+    real(8), allocatable :: mass(:)
+    real(8), allocatable :: bind(:)
     real(8), allocatable :: a(:)
     real(8), allocatable :: z(:)
     real(8), allocatable :: n(:)
@@ -64,7 +66,7 @@ contains
     net%use_winvne = .false.
 
     net%n_spec = 4
-    allocate(net%mexc(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), net%g0(net%n_spec), net%zai(net%n_spec))
+    allocate(net%mexc(net%n_spec), net%mass(net%n_spec), net%bind(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), net%g0(net%n_spec), net%zai(net%n_spec))
     ! n
     net%a(1) = 1d0; net%z(1) = 0d0; net%n(1) = 1d0; net%g0(1) = 2d0; net%mexc(1) = mnmev-net%a(1)*mumev
     ! p
@@ -75,6 +77,9 @@ contains
     net%a(4) =56d0; net%z(4) =28d0; net%n(4) =28d0; net%g0(4) = 1d0; net%mexc(4) = mexc_56ni_mev-net%z(4)*memev
 
     net%zai(:) = net%z(:)/net%a(:)
+
+    net%mass(:) = net%a(:)*mumev + net%mexc(:)
+    net%bind(:) = net%z(:)*mpmev + net%n(:)*mnmev - net%mass(:)
     
   end subroutine nse_init_four
 
@@ -82,7 +87,7 @@ contains
 
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: find_rauscher_index
-    use const, only: memev
+    use const,only:mnmev,mpmev,mamev,mumev,memev
 
     type(nse_network_t), intent(out) :: net
     type(stat_weight_policy_t),intent(in) :: stat_weight_policy
@@ -112,7 +117,7 @@ contains
     net%stat_weight_policy = stat_weight_policy
 
     allocate(net%name_nucl(ns))
-    allocate(net%mexc(ns), net%a(ns), net%z(ns), net%n(ns), &
+    allocate(net%mexc(ns), net%mass(ns), net%bind(ns), net%a(ns), net%z(ns), net%n(ns), &
          net%g0(ns), net%zai(ns))
 
     do i = 1, ns
@@ -133,6 +138,8 @@ contains
        net%name_nucl(i) = name_winvne(iwinvne(i))
 
     enddo
+    net%mass(:) = net%a(:)*mumev + net%mexc(:)
+    net%bind(:) = net%z(:)*mpmev + net%n(:)*mnmev - net%mass(:)
 
     net%zai(:) = net%z(:)/net%a(:)
 
@@ -147,7 +154,7 @@ contains
 
     use module_nuclear_data_winvne
     use module_ptf_rauscher, only: find_rauscher_index
-    use const, only: memev
+    use const,only:mnmev,mpmev,mamev,mumev,memev
     use module_nse_species_policy
     
     type(nse_network_t),intent(out) :: net
@@ -214,7 +221,7 @@ contains
     allocate(iwinvne(net%n_spec), irauscher(net%n_spec))
 
     allocate(net%name_nucl(net%n_spec))
-    allocate(net%mexc(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), &
+    allocate(net%mexc(net%n_spec), net%mass(net%n_spec), net%bind(net%n_spec), net%a(net%n_spec), net%z(net%n_spec), net%n(net%n_spec), &
          net%g0(net%n_spec), net%zai(net%n_spec))
 
     ! ---------------------------------------------------------
@@ -240,6 +247,9 @@ contains
        net%name_nucl(i) = name_winvne(k)
 
     enddo
+    
+    net%mass(:) = net%a(:)*mumev + net%mexc(:)
+    net%bind(:) = net%z(:)*mpmev + net%n(:)*mnmev - net%mass(:)
 
     if (i /= net%n_spec) then
        write(*,*) "ERROR constructing NSE species:", i, net%n_spec
@@ -729,8 +739,8 @@ contains
     if(present(xn_out)) xn_out = xn
     if(present(xp_out)) xp_out = xp
 
-  end subroutine calc_nse
-
+  end subroutine calc_nse_with_guess
+  
 
   subroutine two_nuclei_approx(net,rho,ye,xnse)
     type(nse_network_t),intent(in) :: net
