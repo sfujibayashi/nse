@@ -22,10 +22,13 @@ contains
 
   subroutine init_nuclear_data_HS(fn)
 
+    use iso_fortran_env, only: int32
+
     character(*), intent(in) :: fn
 
     integer :: iu, ios
     integer :: k, ia, iz
+    integer(int32) :: record_size
 
     allocate(az_HS(nct_HS,2))
     allocate(mass_HS(nct_HS))
@@ -33,7 +36,7 @@ contains
 
     open(newunit=iu, file=trim(fn), &
          status="old", action="read", &
-         form="unformatted", access="sequential", &
+         form="unformatted", access="stream", &
          iostat=ios)
 
     if (ios /= 0) then
@@ -41,17 +44,28 @@ contains
        error stop
     endif
 
-    ! The original record contains
-    !
-    !   az, mass, bind, comp
-    !
-    ! Only the first three objects are needed here.
-    read(iu, iostat=ios) az_HS, mass_HS, bind_HS
+    ! Intel sequential-unformatted file:
+    ! first 4 bytes = record length
+    read(iu, pos=1, iostat=ios) record_size
+
+    if (ios /= 0) then
+       write(*,*) "ERROR reading HS record marker"
+       error stop
+    endif
+
+    if (record_size /= 103284384_int32) then
+       write(*,*) "ERROR: unexpected HS record size:", record_size
+       error stop
+    endif
+
+    ! Payload begins immediately after the 4-byte record marker.
+    ! Read only az, mass, bind; do not touch the huge comp array.
+    read(iu, pos=5, iostat=ios) az_HS, mass_HS, bind_HS
 
     close(iu)
 
     if (ios /= 0) then
-       write(*,*) "ERROR reading HS nuclear-data file: ", trim(fn)
+       write(*,*) "ERROR reading HS nuclear data: ", trim(fn)
        error stop
     endif
 
