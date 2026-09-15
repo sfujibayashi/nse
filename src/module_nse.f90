@@ -42,9 +42,6 @@ module module_nse
     
     character(5), allocatable :: name_nucl(:)
     
-    ! integer, allocatable :: iwinvne(:)
-    ! integer, allocatable :: irauscher(:)
-    
     logical :: use_winvne = .false.
     
     real(8) :: n0_fm = 0.1583d0
@@ -84,7 +81,7 @@ contains
   subroutine nse_init_aprox21(net, stat_weight_policy)
 
     use module_nuclear_data_winvne
-    use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher, find_rauscher_index
+    use module_ptf_rauscher, only: find_rauscher_index
     use const, only: memev
 
     type(nse_network_t), intent(out) :: net
@@ -98,7 +95,7 @@ contains
          0, 1, 2, 2,  6,  7,  8, 10, 12, 14, &
          16,18,20,22,24,24,26,26,26,28 ]
 
-    integer :: i, j
+    integer :: i
 
     integer, allocatable :: iwinvne(:), irauscher(:)
     
@@ -114,8 +111,6 @@ contains
     
     net%stat_weight_policy = stat_weight_policy
 
-
-    ! allocate(net%iwinvne(ns), net%irauscher(ns))
     allocate(net%name_nucl(ns))
     allocate(net%mexc(ns), net%a(ns), net%z(ns), net%n(ns), &
          net%g0(ns), net%zai(ns))
@@ -151,13 +146,13 @@ contains
   subroutine nse_init_winvne(net, stat_weight_policy)
 
     use module_nuclear_data_winvne
-    use module_ptf_rauscher, only: nct_rauscher, z_rauscher, a_rauscher, find_rauscher_index
+    use module_ptf_rauscher, only: find_rauscher_index
     use const, only: memev
     
     type(nse_network_t),intent(out) :: net
     type(stat_weight_policy_t), intent(in) :: stat_weight_policy
 
-    integer :: i, j, k
+    integer :: i, k
     integer,allocatable :: jrauscher(:)
 
     integer, allocatable :: iwinvne(:), irauscher(:)
@@ -205,8 +200,6 @@ contains
     write(6,'(a,i6)') "NSE species kept         = ", net%n_spec
 
 
-    ! allocate(net%iwinvne(net%n_spec))
-    ! allocate(net%irauscher(net%n_spec))
     allocate(iwinvne(net%n_spec), irauscher(net%n_spec))
 
     allocate(net%name_nucl(net%n_spec))
@@ -252,7 +245,8 @@ contains
 
     call resolve_network_stat_weights( &
          net, iwinvne, irauscher)
-
+    deallocate(iwinvne, irauscher)
+    
   end subroutine nse_init_winvne
 
 
@@ -327,55 +321,6 @@ contains
 
   end subroutine calc_ptf_nse
 
-  ! subroutine get_fallback_stat_weight(net, i, t9, g)
-
-  !   use module_nuclear_data_winvne, only: get_stat_weight_winvne
-  !   use module_ptf_rauscher, only: get_stat_weight_rauscher
-  !   use module_stat_weight_policy, only: &
-  !        STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
-
-  !   type(nse_network_t), intent(in) :: net
-  !   integer, intent(in) :: i
-  !   real(8), intent(in) :: t9
-  !   real(8), intent(out) :: g
-
-  !   select case (net%stat_weight_policy%fallback)
-
-  !   case (STAT_WEIGHT_WINVNE)
-
-  !      if (net%iwinvne(i) <= 0) then
-  !         write(*,*) "ERROR: WinVNE statistical weight unavailable for ", &
-  !              net%name_nucl(i)
-  !         error stop
-  !      endif
-
-  !      call get_stat_weight_winvne(t9, net%iwinvne(i), g)
-
-  !   case (STAT_WEIGHT_RAUSCHER)
-
-  !      if (net%irauscher(i) <= 0) then
-  !         write(*,*) "ERROR: Rauscher statistical weight unavailable for ", &
-  !              net%name_nucl(i)
-  !         error stop
-  !      endif
-
-  !      call get_stat_weight_rauscher(t9, net%irauscher(i), g)
-
-  !   case (STAT_WEIGHT_NONE)
-
-  !      write(*,*) "ERROR: no statistical-weight source for ", &
-  !           net%name_nucl(i)
-  !      error stop
-
-  !   case default
-
-  !      write(*,*) "ERROR: invalid fallback statistical-weight source"
-  !      error stop
-
-  !   end select
-
-  ! end subroutine get_fallback_stat_weight
-
 
   subroutine calc_coulomb_HS(net, rho, ye, fcoul)
 
@@ -385,7 +330,7 @@ contains
     real(8),intent(in)  :: rho, ye
     real(8),intent(out) :: fcoul(net%n_spec)
 
-    real(8) :: ne, n0, r, x
+    real(8) :: ne, n0
     integer :: k
 
     ! fm^-3 -> cm^-3
@@ -565,7 +510,7 @@ contains
     real(8),intent(out),optional :: xn_out,xp_out
     
     real(8) :: logrho0
-    real(8) :: logge(net%n_spec), logx(net%n_spec), x(net%n_spec), fcoul(net%n_spec), g(net%n_spec)
+    real(8) :: logge(net%n_spec), logx(net%n_spec), fcoul(net%n_spec), g(net%n_spec)
     
     real(8) :: xp,xn
 
@@ -578,8 +523,6 @@ contains
     real(8) :: t9
 
     real(8),parameter :: n0 = 0.16d0*1d39
-    integer :: i_spec
-    real(8) :: nb
     
     ! log(rho0/rho)
     logrho0 = 2.5d0*log(mu) + 1.5d0*log(kerg*temp) - 1.5d0*log(2d0*pi) - 3d0*log(hbar) - log(rho)
@@ -946,13 +889,12 @@ contains
     real(8),intent(out) :: dx,dye,dxn,dxp
     real(8),intent(out),optional :: det_out,dxdn_out,dxdp_out,dyedn_out,dyedp_out, rcond_out
     
-    real(8) :: logx(net%n_spec), x(net%n_spec)
+    real(8) :: logx(net%n_spec)
 
-    real(8) :: xsum,yesum
-    real(8) :: det,dxdn,dxdp,dyedn,dyedp
+    real(8) :: det
 
-    real(8) :: u(net%n_spec), logx_max, logx_sum, uq(net%n_spec), logq_max, usum, qsum, w(net%n_spec), qbar
-    real(8) :: f1, f2, nbar, zbar, qnbar, qzbar, df1dn, df1dp, df2dn, df2dp
+    real(8) :: u(net%n_spec), logx_max, uq(net%n_spec), logq_max, usum, qsum
+    real(8) :: f1, f2, df1dn, df1dp, df2dn, df2dp
 
     real(8),parameter :: rcond_min = 1d-12
     real(8) :: jnorm1, adjnorm1, rcond
