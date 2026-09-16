@@ -8,7 +8,7 @@ module module_nse
 
   private
   public :: nse_init_four,nse_init_aprox21,nse_init_winvne
-  public :: calc_nse,test_converge,output_composition,statistic,statistic_compose, two_nuclei_approx
+  public :: calc_nse,calc_nse_nested_1d,test_converge,output_composition,statistic,statistic_compose, two_nuclei_approx
 
   public :: output_nse_full
   public :: fcoulomb_HS
