@@ -135,6 +135,7 @@ program make_compose_helmholtz
               !      xnse, nsefail, .false., &
               !      itr_out=itr_out, err_out=err_out, &
               !      xn_out=xn_out, xp_out=xp_out)
+
            else
               call calc_nse_nested_1d( &
                    net, rho, temp_k, ye, itrlim, tol, &
@@ -151,9 +152,6 @@ program make_compose_helmholtz
 
 
            endif
-           
-           xn_guess = xn_out
-           xp_guess = xp_out
 
            ! if (nsefail) then
            !    fallback_count = fallback_count + 1

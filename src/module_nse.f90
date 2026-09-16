@@ -1783,5 +1783,344 @@ contains
     enddo
 
   end subroutine resolve_network_stat_weights
+  
+  subroutine nse_solve_u_for_v(net, logge, v, u_guess, tol, itrlim, &
+       u, x, fmass, logye_calc, dlogye_dv, &
+       itr_out, fail)
+
+    use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
+
+    implicit none
+
+    type(nse_network_t), intent(in) :: net
+
+    real(8), intent(in) :: logge(net%n_spec)
+    real(8), intent(in) :: v
+    real(8), intent(in) :: u_guess
+    real(8), intent(in) :: tol
+    integer, intent(in) :: itrlim
+
+    real(8), intent(out) :: u
+    real(8), intent(out) :: x(net%n_spec)
+
+    real(8), intent(out) :: fmass
+    real(8), intent(out) :: logye_calc
+    real(8), intent(out) :: dlogye_dv
+
+    integer, intent(out) :: itr_out
+    logical, intent(out) :: fail
+
+
+    real(8) :: ulo, uhi
+    real(8) :: flo, fhi
+    real(8) :: fu, dfdu
+    real(8) :: unew
+    real(8) :: step
+
+    integer :: ib, itr
+
+    integer, parameter :: max_bracket = 200
+
+
+    fail = .false.
+    itr_out = 0
+
+    u = u_guess
+
+    call nse_eval_mass_uv(net, logge, u, v, fu, dfdu)
+
+    if (abs(fu) < tol) then
+
+       call nse_eval_composition_uv(net, logge, u, v, &
+            x, fmass, logye_calc, dlogye_dv)
+
+       return
+
+    endif
+
+
+    ! ------------------------------------------------------------
+    ! Bracket normalization root:
+    !
+    ! f(u) = log(sum_i X_i)
+    !
+    ! df/du = <A> > 0, so it is strictly monotonic.
+    ! ------------------------------------------------------------
+
+    step = 1d0
+
+    if (fu > 0d0) then
+
+       uhi = u
+       fhi = fu
+
+       ulo = u - step
+
+       do ib = 1, max_bracket
+
+          call nse_eval_mass_uv(net, logge, ulo, v, flo, dfdu)
+
+          if (flo <= 0d0) exit
+
+          step = 2d0*step
+          ulo = ulo - step
+
+       enddo
+
+       if (flo > 0d0) then
+          fail = .true.
+          return
+       endif
+
+    else
+
+       ulo = u
+       flo = fu
+
+       uhi = u + step
+
+       do ib = 1, max_bracket
+
+          call nse_eval_mass_uv(net, logge, uhi, v, fhi, dfdu)
+
+          if (fhi >= 0d0) exit
+
+          step = 2d0*step
+          uhi = uhi + step
+
+       enddo
+
+       if (fhi < 0d0) then
+          fail = .true.
+          return
+       endif
+
+    endif
+
+
+    ! ------------------------------------------------------------
+    ! Safeguarded Newton solve.
+    ! ------------------------------------------------------------
+
+    u = min(max(u_guess, ulo), uhi)
+
+    do itr = 1, itrlim
+
+       call nse_eval_mass_uv(net, logge, u, v, fu, dfdu)
+
+       itr_out = itr
+
+       if (abs(fu) < tol) exit
+
+
+       if (fu < 0d0) then
+          ulo = u
+          flo = fu
+       else
+          uhi = u
+          fhi = fu
+       endif
+
+
+       unew = u - fu/dfdu
+
+       if (.not. ieee_is_finite(unew)) then
+
+          unew = 0.5d0*(ulo + uhi)
+
+       elseif (unew <= ulo .or. unew >= uhi) then
+
+          unew = 0.5d0*(ulo + uhi)
+
+       endif
+
+       u = unew
+
+    enddo
+
+
+    call nse_eval_mass_uv(net, logge, u, v, fu, dfdu)
+
+    if (abs(fu) >= tol) then
+       fail = .true.
+       return
+    endif
+
+
+    call nse_eval_composition_uv(net, logge, u, v, &
+         x, fmass, logye_calc, dlogye_dv)
+
+  end subroutine nse_solve_u_for_v
+
+
+  subroutine nse_eval_mass_uv(net, logge, u, v, fmass, dfdu)
+
+    implicit none
+
+    type(nse_network_t), intent(in) :: net
+
+    real(8), intent(in) :: logge(net%n_spec)
+    real(8), intent(in) :: u, v
+
+    real(8), intent(out) :: fmass
+    real(8), intent(out) :: dfdu
+
+    real(8) :: logx(net%n_spec)
+    real(8) :: w(net%n_spec)
+
+    real(8) :: logx_max
+    real(8) :: wsum
+
+
+    logx(:) = logge(:) + net%a(:)*u + net%z(:)*v
+
+    logx_max = maxval(logx(:))
+
+    w(:) = exp(logx(:) - logx_max)
+
+    wsum = sum(w(:))
+
+    ! log(sum X_i)
+    fmass = logx_max + log(wsum)
+
+    ! d/du log(sum X_i) = <A>
+    dfdu = sum(net%a(:)*w(:))/wsum
+
+  end subroutine nse_eval_mass_uv
+
+  subroutine nse_eval_composition_uv(net, logge, u, v, &
+       x, fmass, logye_calc, dlogye_dv)
+
+    implicit none
+
+    type(nse_network_t), intent(in) :: net
+
+    real(8), intent(in) :: logge(net%n_spec)
+    real(8), intent(in) :: u, v
+
+    real(8), intent(out) :: x(net%n_spec)
+
+    real(8), intent(out) :: fmass
+    real(8), intent(out) :: logye_calc
+    real(8), intent(out) :: dlogye_dv
+
+
+    real(8) :: logx(net%n_spec)
+    real(8) :: w(net%n_spec)
+
+    real(8) :: q(net%n_spec)
+
+    real(8) :: logqterm(net%n_spec)
+    real(8) :: cw(net%n_spec)
+
+    real(8) :: logx_max
+    real(8) :: wsum
+
+    real(8) :: logq_max
+    real(8) :: csum
+
+    real(8) :: sum_ax
+    real(8) :: sum_zx
+    real(8) :: qbar_a
+
+    integer :: k
+
+
+    logx(:) = logge(:) + net%a(:)*u + net%z(:)*v
+
+    logx_max = maxval(logx(:))
+
+    w(:) = exp(logx(:) - logx_max)
+
+    wsum = sum(w(:))
+
+    x(:) = w(:)/wsum
+
+    fmass = logx_max + log(wsum)
+
+
+    ! ------------------------------------------------------------
+    ! Ye = sum_i (Z_i/A_i) X_i
+    !
+    ! Evaluate log(Ye) with log-sum-exp so that very small charged
+    ! components do not underflow unnecessarily.
+    ! ------------------------------------------------------------
+
+    q(:) = net%z(:)/net%a(:)
+
+    if (.not. any(q(:) > 0d0)) then
+       write(*,*) "ERROR in nse_eval_composition_uv: no charged species"
+       error stop
+    endif
+
+    logqterm(:) = -huge(1d0)
+
+    do k = 1, net%n_spec
+       if (q(k) > 0d0) then
+          logqterm(k) = logx(k) + log(q(k))
+       endif
+    enddo
+
+    logq_max = maxval(logqterm(:), mask=q(:) > 0d0)
+
+    cw(:) = 0d0
+
+    do k = 1, net%n_spec
+       if (q(k) > 0d0) then
+          cw(k) = exp(logqterm(k) - logq_max)
+       endif
+    enddo
+
+    csum = sum(cw(:))
+
+    logye_calc = logq_max + log(csum) - fmass
+
+
+    ! ------------------------------------------------------------
+    ! Along the normalization surface sum X_i = 1,
+    !
+    ! du/dv = - <Z>_X / <A>_X.
+    !
+    ! Therefore
+    !
+    ! d Ye / dv
+    !   = sum_i A_i X_i (q_i - qbar_A)^2 >= 0
+    !
+    ! where
+    !
+    ! qbar_A = sum Z_i X_i / sum A_i X_i.
+    !
+    ! We need d log(Ye)/dv for the outer Newton step.
+    !
+    ! Evaluate it using charge-weighted normalized weights cw.
+    ! ------------------------------------------------------------
+
+    sum_ax = sum(net%a(:)*x(:))
+    sum_zx = sum(net%z(:)*x(:))
+
+    qbar_a = sum_zx/sum_ax
+
+    cw(:) = cw(:)/csum
+
+    dlogye_dv = 0d0
+
+    do k = 1, net%n_spec
+
+       if (q(k) > 0d0) then
+
+          dlogye_dv = dlogye_dv &
+               + cw(k)*(net%z(k) - net%a(k)*qbar_a)
+
+       endif
+
+    enddo
+
+    ! The exact result is non-negative.
+    ! Remove tiny negative round-off.
+    dlogye_dv = max(0d0, dlogye_dv)
+
+  end subroutine nse_eval_composition_uv
+
+
 
 end module module_nse
