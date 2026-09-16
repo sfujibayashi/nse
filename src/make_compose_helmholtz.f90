@@ -49,6 +49,8 @@ program make_compose_helmholtz
   real(8) :: baryon_sum, charge_sum
   real(8) :: max_baryon_err, max_charge_err
 
+  integer :: u_summary
+
   call get_command_argument(1, fn_para)
   if (len_trim(fn_para) == 0) then
      write(*,*) "usage: make_compose_helmholtz <parameter-file>"
@@ -111,6 +113,14 @@ program make_compose_helmholtz
   write(*,'(a,2es14.6)') "Yq         = ", yq(1), yq(nyq)
   write(*,'(a,i0)') "NSE species = ", net%n_spec
 
+  open(newunit=u_summary, file= "summary.dat", status="replace", action="write")
+
+  !$omp parallel default(none) &
+  !$omp shared(net, u_summary, nyq, nt, nnb, yq, t, nb, ye_tab, q1, q2, q7, q6, cs2, mue, &
+  !$omp   yn, yp, yh2, yh3, yhe3, yhe4, ynuc, anuc, znuc, abar) &
+  !$omp private(ye, temp_k, rho, xnse, nsefail, itr_out, err_out, xn_out, xp_out, xn_guess, xp_guess, &
+  !$omp   mexc, ytot, charge_sum, baryon_sum, max_baryon_err, max_charge_err, eps, pres, cs2_cgs, entr, eta_e)
+  !$omp do
   do iyq = 1, nyq
      ye = yq(iyq)
 
@@ -221,8 +231,8 @@ program make_compose_helmholtz
            ! chemical potential used by CompOSE.
            mue(it,iyq,inb) = memev + eta_e * t(it)
 
-           ! write(6,'(99es12.4)') yn(it,iyq,inb), yp(it,iyq,inb), ynuc(it,iyq,inb)*anuc(it,iyq,inb), anuc(it,iyq,inb), &
-           !      znuc(it,iyq,inb), abar(it,iyq,inb)
+           write(u_summary,'(99es20.10e3)') nb(inb), t(it), ye, xn_out, xp_out, yn(it,iyq,inb), yp(it,iyq,inb), ynuc(it,iyq,inb)*anuc(it,iyq,inb), anuc(it,iyq,inb), &
+                znuc(it,iyq,inb), abar(it,iyq,inb)
 
         enddo
 
@@ -231,6 +241,8 @@ program make_compose_helmholtz
              "  Yq=", ye, "  T[MeV]=", t(it)
      enddo
   enddo
+  !$omp end do
+  !$omp end parallel
 
   ! Q5 is obtained from dF_b/dYq at fixed (nb,T), including the
   ! response of the NSE composition.  For charge-neutral matter this is
@@ -260,6 +272,7 @@ contains
     character(*), intent(out) :: fn_winv, fn_rauscher, fn_hs, fn_helm, fn_out
     integer, intent(out) :: nnb, nt, nyq
     real(8), intent(out) :: nb_min, nb_max, t_min, t_max, yq_min, yq_max
+    real(8) :: lognb_min, lognb_max, logt_min, logt_max
 
     integer :: iu, ios
 
@@ -274,11 +287,17 @@ contains
     read(iu,*); read(iu,'(a)') fn_hs
     read(iu,*); read(iu,'(a)') fn_helm
     read(iu,*); read(iu,'(a)') fn_out
-    read(iu,*); read(iu,*) nnb, nb_min, nb_max
-    read(iu,*); read(iu,*) nt,  t_min,  t_max
+    read(iu,*); read(iu,*) nnb, lognb_min, lognb_max
+    read(iu,*); read(iu,*) nt,  logt_min,  logt_max
     read(iu,*); read(iu,*) nyq, yq_min, yq_max
 
     close(iu)
+
+    nb_min = 10d0**lognb_min
+    nb_max = 10d0**lognb_max
+
+    t_min = 10d0**logt_min
+    t_max = 10d0**logt_max
 
     fn_winv     = trim(adjustl(fn_winv))
     fn_rauscher = trim(adjustl(fn_rauscher))
