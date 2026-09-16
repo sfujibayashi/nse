@@ -3,7 +3,7 @@ EXE_DIR := bin/
 
 PROG:=$(EXE_DIR)a.out
 
-FC := gfortran
+FC := h5fc
 FFLAGS := -ffree-line-length-none #-mcmodel=large 
 FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=invalid,zero,overflow,underflow
 
@@ -15,14 +15,15 @@ FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=i
 .SUFFIXES: .f90 .F90 .o
 
 MOD := const_mod.f90 module_nuclear_data_winvne.f90 module_ptf_rauscher.f90 
-MOD += module_nuclear_data_HS.f90 module_nuclear_mass_policy.f90\
+MOD += module_nuclear_data_HS.f90 module_nuclear_mass_policy.f90 module_compose_hdf5.f90\
 module_stat_weight_policy.f90 module_nse_species_policy.f90 module_stat_weight_HS.f90 module_nse.f90 module_eos_helmholtz.f90
 SRC :=  locate.f90 polint.f90 index_rank.f90
 # SRC += nse_single.f90
 # SRC += nse_aprox21.f90
 # SRC += make_nse_table.f90
 # SRC += nse_compose_points.f90
-SRC += compose_extraction.f90
+#SRC += compose_extraction.f90
+SRC += make_compose_helmholtz.f90
 #MOD := module_nuclear_data_HS.f90
 #SRC := check_HSmass.f90
 
