@@ -688,6 +688,7 @@ contains
 
     real(8) :: u, v
     real(8) :: u0, v0
+    real(8) :: u_seed
 
     real(8) :: vlo, vhi
     real(8) :: flo, fhi, fv
@@ -850,8 +851,8 @@ contains
        vhi = v0 + step
 
        do ib = 1, max_bracket
-
-          call nse_solve_u_for_v(net, logge, vhi, u, tol, itrlim, &
+          u_seed = u
+          call nse_solve_u_for_v(net, logge, vhi, u_seed, tol, itrlim, &
                u, xnse, fmass, logye_calc, dlogye_dv, &
                iinner, inner_fail)
 
@@ -888,8 +889,8 @@ contains
        vlo = v0 - step
 
        do ib = 1, max_bracket
-
-          call nse_solve_u_for_v(net, logge, vlo, u, tol, itrlim, &
+          u_seed = u
+          call nse_solve_u_for_v(net, logge, vlo, u_seed, tol, itrlim, &
                u, xnse, fmass, logye_calc, dlogye_dv, &
                iinner, inner_fail)
 
@@ -926,8 +927,9 @@ contains
     v = 0.5d0*(vlo + vhi)
 
     do itr = 1, itrlim
-       write(6,*) itr
-       call nse_solve_u_for_v(net, logge, v, u, tol, itrlim, &
+       u_seed = u
+       write(6,*) itr, u_seed
+       call nse_solve_u_for_v(net, logge, v, u_seed, tol, itrlim, &
             u, xnse, fmass, logye_calc, dlogye_dv, &
             iinner, inner_fail)
 
