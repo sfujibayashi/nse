@@ -7,5 +7,6 @@
 log
 *~
 *.png
+*.pdf
 obj
 .DS_Store

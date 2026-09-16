@@ -1,32 +1,41 @@
 # NSE solver
 
-A Fortran solver for nuclear statistical equilibrium (NSE) in hot astrophysical matter.
+A Fortran code for nuclear statistical equilibrium (NSE) calculations in hot astrophysical matter.
 
-The code computes an NSE composition at fixed density, temperature, and electron fraction by solving for the neutron and proton chemical potentials subject to
+The code solves for the equilibrium nuclear composition at fixed density, temperature, and electron fraction,
 
-\[
+$$
+(\rho,T,Y_e),
+$$
+
+subject to baryon-number and charge conservation,
+
+$$
 \sum_i X_i = 1,
 \qquad
 \sum_i \frac{Z_i}{A_i}X_i = Y_e.
-\]
+$$
 
-The current implementation stores nuclear-set-dependent quantities in `type(nse_network_t)`, so different NSE species sets can be initialized and solved independently in the same program. Currently supported sets include a large WinVNE-based set, an `aprox21`-like reduced set, and a small four-species test set.
+The repository is currently being developed not only as an NSE solver, but also as a tool for constructing thermodynamically consistent NSE + Helmholtz-EOS tables in a CompOSE-compatible HDF5 format.
 
-> **Status:** research code under active development. Some auxiliary drivers in `src/` are development tools and may not always track the latest module interface.
+> **Status:** research code under active development. Interfaces and development drivers may change.
 
-## Features
+## Main features
 
-- NSE solution at fixed `rho`, `T`, and `Ye`
-- damped Newton iteration in neutron/proton chemical potentials
-- logarithmic abundance evaluation for numerical stability
-- WinVNE nuclear masses, spins, and partition functions
-- optional Rauscher partition functions with WinVNE fallback
-- Hempel-type Coulomb correction
-- explicit `nse_network_t` objects for multiple nuclear sets
-- large-NSE and reduced `aprox21` NSE calculations
-- diagnostics for `Abar`, heavy-nucleus moments, light-particle abundances, mass excess, and Coulomb energy
+* NSE composition at fixed \((\rho,T,Y_e)\)
+* large WinVNE-based nuclear species set
+* reduced `aprox21`-like NSE set
+* selectable nuclear-mass prescriptions
+* selectable nuclear statistical-weight prescriptions
+* Coulomb corrections
+* conventional two-dimensional Newton NSE solver
+* nested one-dimensional NSE solver with safeguarded root finding
+* continuation of chemical-potential variables across thermodynamic grids
+* Helmholtz EOS interface
+* generation of CompOSE-style thermodynamic and composition tables
+* diagnostics for composition moments, mass excess, and Coulomb energy
 
-## Repository layout
+## Repository structure
 
 ```text
 .
@@ -34,11 +43,17 @@ The current implementation stores nuclear-set-dependent quantities in `type(nse_
 │   └── winvn_v2.0.dat
 ├── src/
 │   ├── module_nse.f90
-│   ├── module_ptf_reaclib.f90
+│   ├── module_nuclear_data_winvne.f90
+│   ├── module_nuclear_data_HS.f90
+│   ├── module_nuclear_mass_policy.f90
+│   ├── module_stat_weight_policy.f90
+│   ├── module_stat_weight_HS.f90
+│   ├── module_nse_species_policy.f90
 │   ├── module_ptf_rauscher.f90
-│   ├── const_mod.f90
-│   ├── nse_single.f90
-│   ├── nse_aprox21.f90
+│   ├── module_eos_helmholtz.f90
+│   ├── make_compose_helmholtz.f90
+│   ├── make_nse_table.f90
+│   ├── compose_extraction.f90
 │   └── ...
 ├── utils/
 │   ├── pl_nse.py
@@ -46,358 +61,515 @@ The current implementation stores nuclear-set-dependent quantities in `type(nse_
 └── makefile
 ```
 
-The default `makefile` currently builds `src/nse_single.f90`.
-
-## Build
-
-The supplied makefile uses `gfortran`.
-
-```bash
-git clone https://github.com/sfujibayashi/nse.git
-cd nse
-make
-```
-
-The executable is created as
+The central NSE implementation is contained in
 
 ```text
-bin/a.out
+src/module_nse.f90
 ```
 
-No external numerical library is required for the default build.
+while the current main development driver is
+
+```text
+src/make_compose_helmholtz.f90
+```
+
+which combines an NSE composition with the Helmholtz EOS and constructs a CompOSE-style table.
 
 ## Nuclear data
 
-### WinVNE data
+### WinVNE
 
-The repository includes
+The repository contains
 
 ```text
 data/winvn_v2.0.dat
 ```
 
-which provides nuclear masses, ground-state spins, and tabulated partition functions.
+with nuclear masses, ground-state spins, and tabulated nuclear partition functions.
+
+The mass excess in the WinVNE file is an atomic mass excess. Internally the electron rest masses are removed,
+
+$$
+m_{\mathrm{exc,nuc}}
+=
+m_{\mathrm{exc,atomic}}-Z m_e c^2,
+$$
+
+so that the NSE calculation uses bare nuclear masses.
 
 ### Rauscher partition functions
 
-The code can optionally use a Rauscher partition-function table. This file is not currently bundled in the repository and must be supplied separately.
-
-`module_ptf_rauscher.f90` expects a 23-line header followed by one record per nucleus of the form
+A Rauscher partition-function table can also be read by
 
 ```text
-Z  A  J0  PF(T9_1) ... PF(T9_72)
+module_ptf_rauscher.f90
 ```
 
-where the temperature grid is defined in the module.
+The Rauscher table is not distributed with this repository and must be supplied separately.
 
-At present the single-point driver initializes the Rauscher table even if the Rauscher partition functions are disabled, so a valid file path is still required.
+### HS nuclear data
 
-## Quick start: single-point NSE
+The code can also use nuclear masses and statistical weights associated with the Hempel-Schaffner-Bielich-type nuclear treatment.
 
-Create a parameter file, for example `single.para`:
+The corresponding nuclear-data binary file is not included in this repository and must be supplied separately.
 
-```text
-# WinVNE data
-data/winvn_v2.0.dat
-# Use Rauscher partition functions?
-T
-# Rauscher partition-function table
-/path/to/rauscher_partition_functions.dat
-# Output file
-nse.dat
-# rho [g cm^-3], T [K], Ye
-1.0e8 9.0e9 0.50
+## Nuclear-data policies
+
+The current implementation separates three choices that were previously implicit in the NSE initialization.
+
+### Nuclear masses
+
+The nuclear-mass source is selected using
+
+```fortran
+type(nuclear_mass_policy_t) :: nuclear_mass_policy
 ```
 
-Run
+Available sources are
 
-```bash
-./bin/a.out single.para
+```fortran
+NUCLEAR_MASS_WINVNE
+NUCLEAR_MASS_HS
 ```
 
-The output file contains
+with an optional fallback source.
 
-```text
-index  name  A  Z  N  Xi  Yi  gi
+For example,
+
+```fortran
+nuclear_mass_policy%primary  = NUCLEAR_MASS_WINVNE
+nuclear_mass_policy%fallback = NUCLEAR_MASS_NONE
 ```
 
-where
+uses WinVNE masses only.
 
-- `Xi` is the mass fraction,
-- `Yi = Xi/Ai` is the abundance per baryon,
-- `gi` is the nuclear statistical weight including the partition function.
+### Statistical weights
 
-## General Fortran usage
+The statistical-weight source is controlled by
 
-The main API is provided by
+```fortran
+type(stat_weight_policy_t) :: stat_weight_policy
+```
+
+Available prescriptions are
+
+```fortran
+STAT_WEIGHT_WINVNE
+STAT_WEIGHT_RAUSCHER
+STAT_WEIGHT_HS
+```
+
+with an optional fallback.
+
+For example,
+
+```fortran
+stat_weight_policy%primary  = STAT_WEIGHT_HS
+stat_weight_policy%fallback = STAT_WEIGHT_WINVNE
+```
+
+uses the HS prescription whenever requested and falls back to the WinVNE statistical weight otherwise.
+
+### NSE species set
+
+The large WinVNE NSE set is selected using
+
+```fortran
+type(nse_species_policy_t) :: species_policy
+```
+
+Current choices include
+
+```fortran
+NSE_SPECIES_LEGACY
+NSE_SPECIES_ALL_WINVNE
+```
+
+The legacy selection keeps nuclei available in the Rauscher set together with WinVNE nuclei having \(Z<87\).
+
+## Initializing an NSE network
+
+A typical initialization is
 
 ```fortran
 use module_nse
+use module_nuclear_data_winvne
+use module_nuclear_data_HS
+use module_ptf_rauscher
+use module_stat_weight_policy
+use module_nuclear_mass_policy
+use module_nse_species_policy
+
+type(nse_network_t) :: net
+type(stat_weight_policy_t) :: stat_weight_policy
+type(nuclear_mass_policy_t) :: nuclear_mass_policy
+type(nse_species_policy_t) :: species_policy
+
+call init_winvne("data/winvn_v2.0.dat")
+call init_nuclear_data_HS("/path/to/HS-nuclear-data")
+call init_ptf_rauscher("/path/to/rauscher-partition-functions")
+
+nuclear_mass_policy%primary  = NUCLEAR_MASS_WINVNE
+nuclear_mass_policy%fallback = NUCLEAR_MASS_NONE
+
+stat_weight_policy%primary  = STAT_WEIGHT_HS
+stat_weight_policy%fallback = STAT_WEIGHT_WINVNE
+
+species_policy%mode = NSE_SPECIES_LEGACY
+
+call nse_init_winvne( &
+     net, stat_weight_policy, species_policy, nuclear_mass_policy)
 ```
 
-A typical large-NSE calculation is
+The nuclear properties belonging to a particular NSE set are stored in
 
 ```fortran
-program example_nse
-  use module_nse
-  use module_ptf_reaclib
-  use module_ptf_rauscher
-  implicit none
-
-  type(nse_network_t) :: net
-  real(8), allocatable :: x(:)
-
-  real(8) :: rho, temp, ye
-  integer, parameter :: itrlim = 300
-  real(8), parameter :: tol = 1.d-10
-  logical :: nsefail
-
-  call init_ptf_reaclib("data/winvn_v2.0.dat")
-  call init_ptf_rauscher("/path/to/rauscher_partition_functions.dat")
-
-  call nse_init_reaclib(net, .true.)
-  allocate(x(net%n_spec))
-
-  rho  = 1.d8
-  temp = 9.d9
-  ye   = 0.30d0
-
-  call calc_nse(net, rho, temp, ye, itrlim, tol, &
-       x, nsefail, .false.)
-
-  ! Robust fallback for difficult points
-  if (nsefail) then
-     call calc_nse(net, rho, temp, ye, itrlim, tol, &
-          x, nsefail, .true.)
-  endif
-
-  if (nsefail) error stop "NSE did not converge"
-
-  call output_nse_full(net, rho, temp, ye, x, "nse.dat")
-
-end program example_nse
+type(nse_network_t)
 ```
 
-For robust calculations, the recommended strategy is to first solve with `use_TNAguess=.false.` and retry with `use_TNAguess=.true.` only if `nsefail=.true.`. This was found to be more reliable than always using the two-nuclei approximation as the initial guess.
+so that multiple NSE networks can coexist in the same program.
 
-## Nuclear sets
+## NSE solvers
 
-### Large NSE set
+Two solver implementations are currently available.
 
-Initialize with
+### `calc_nse`
 
-```fortran
-call nse_init_reaclib(net, use_rauscher_ptf)
-```
-
-Despite the historical `reaclib` naming in the source, nuclear properties are read from the WinVNE-format input table.
-
-With the current large-set construction:
-
-- nuclei matched to the Rauscher table use the Rauscher partition function when enabled;
-- unmatched nuclei with `Z < 87` are retained using the WinVNE partition-function data;
-- unmatched nuclei with `Z >= 87` are excluded.
-
-The exact number of retained species therefore depends on the input data files.
-
-### aprox21 NSE set
-
-Initialize with
-
-```fortran
-call nse_init_aprox21(net, use_rauscher_ptf)
-```
-
-The NSE set contains 20 physically distinct nuclei:
-
-```text
-n, p, He3, He4,
-C12, N14, O16, Ne20, Mg24, Si28, S32, Ar36,
-Ca40, Ti44, Cr48, Cr56, Fe52, Fe54, Fe56, Ni56
-```
-
-The Microphysics `aprox21` reaction network contains both `H1` and `p` as evolved network variables. They correspond to the same physical nucleus `(A,Z)=(1,1)` and therefore must not be counted twice in an NSE partition sum. The NSE implementation consequently contains a single physical proton species.
-
-The large and reduced sets can coexist:
-
-```fortran
-type(nse_network_t) :: net_large, net_aprox21
-
-call nse_init_reaclib(net_large, .true.)
-call nse_init_aprox21(net_aprox21, .true.)
-```
-
-and can then be solved independently at the same `(rho,T,Ye)` point.
-
-### Four-species test set
-
-A small built-in test set is available through
-
-```fortran
-call nse_init_four(net)
-```
-
-and contains
-
-```text
-n, p, He4, Ni56
-```
-
-## Main solver interface
-
-The central routine is
+The original solver solves simultaneously for the neutron and proton chemical-potential variables,
 
 ```fortran
 call calc_nse(net, rho, temp, ye, itrlim, tol, &
      xnse, nsefail, use_TNAguess)
 ```
 
-with
+where
 
 ```text
-rho             density [g cm^-3]
-temp            temperature [K]
-ye              electron fraction
-itrlim          maximum number of Newton iterations
-tol             convergence tolerance
-xnse(:)         returned mass fractions Xi
-nsefail         convergence flag
-use_TNAguess    use the two-nuclei approximation for the initial guess
+rho       rest-mass density [g cm^-3]
+temp      temperature [K]
+ye        electron fraction
+xnse      returned mass fractions
+nsefail   convergence flag
 ```
 
-Additional optional arguments provide convergence histories, iteration counts, residuals, and final neutron/proton chemical-potential variables.
+Optional arguments can be used to supply an initial guess and obtain iteration diagnostics.
 
-Always check `nsefail` before using the returned composition.
+### `calc_nse_nested_1d`
 
-## Diagnostics
-
-Basic composition moments can be obtained with
+A newer solver is provided by
 
 ```fortran
-call statistic(net, x, mexc_ave, z_heavy, a_heavy, &
-     y_heavy, ytot, xsum, yesum)
+call calc_nse_nested_1d( &
+     net, rho, temp, ye, itrlim, tol, &
+     xnse, nsefail, &
+     xn_guess=xn_guess, xp_guess=xp_guess, &
+     xn_out=xn_out, xp_out=xp_out)
 ```
 
-For comparisons with CompOSE-like quantities,
+It introduces
+
+$$
+u=\eta_n,
+\qquad
+v=\eta_p-\eta_n.
+$$
+
+For a fixed \(v\), the inner one-dimensional problem determines \(u\) from baryon normalization. The outer problem then determines \(v\) from the required \(Y_e\).
+
+The outer solve uses bracketing together with a safeguarded Newton iteration.
+
+This formulation is particularly useful when constructing EOS tables because the converged chemical-potential variables at one density can be used as the initial guess at the neighboring density.
+
+## Reduced aprox21 NSE set
+
+A reduced NSE species set corresponding to the physical nuclei represented by the Microphysics `aprox21` network is available through
 
 ```fortran
-type(stat_t) :: stat
-call statistic_compose(net, rho, x, stat)
+call nse_init_aprox21( &
+     net, stat_weight_policy, nuclear_mass_policy)
 ```
 
-returns quantities including
+The set contains 20 physically distinct nuclei,
 
 ```text
-stat%yn, stat%yp
-stat%yh2, stat%yh3, stat%yhe3, stat%yhe4
-stat%a_n, stat%z_n, stat%y_n
-stat%abar
-stat%mexc
-stat%ecoul
+n, p, He3, He4,
+C12, N14, O16, Ne20, Mg24, Si28,
+S32, Ar36, Ca40, Ti44, Cr48, Cr56,
+Fe52, Fe54, Fe56, Ni56
 ```
 
-## Mass-excess convention
-
-Care is required when comparing with external EOS or nuclear-data tables.
-
-The WinVNE input contains atomic mass excesses. Internally they are converted to bare-nuclear mass excesses as
-
-\[
-m_{\rm exc,nuc}
-=
-m_{\rm exc,atomic} - Zm_ec^2.
-\]
-
-`statistic_compose()` adds the rest mass of the balancing electrons,
-
-\[
-Y_e m_e c^2,
-\]
-
-when reporting the average mass excess per baryon.
-
-Mass-excess quantities in `module_nse` are in MeV unless otherwise noted.
-
-## Partition functions
-
-For a WinVNE/Rauscher-based network, the statistical weight is
-
-\[
-g_i(T)=(2J_i+1)G_i(T),
-\]
-
-where `J_i` is the ground-state spin and `G_i(T)` is the nuclear partition function.
-
-When `net%use_rauscher_ptf=.true.` and a matching Rauscher nucleus is available, the Rauscher spin and partition function are used. Otherwise the WinVNE values are used as a fallback.
+The reaction-network variables `H1` and `p` correspond to the same physical proton and are therefore represented by only one NSE species.
 
 ## Coulomb correction
 
-For the WinVNE-based NSE sets, `calc_nse()` includes the Coulomb correction implemented by
+The large NSE calculation includes the Coulomb correction implemented through
 
 ```fortran
 calc_coulomb_HS()
 fcoulomb_HS()
 ```
 
-The default nuclear saturation density is
+The saturation-density parameter used by the current network object is stored as
 
-```text
-n0 = 0.1583 fm^-3
+```fortran
+net%n0_fm
 ```
 
-stored in `net%n0_fm`.
+and can be changed if needed.
 
-## Numerical method
+## Helmholtz EOS
 
-The abundance of each species is evaluated in logarithmic form,
+The repository contains a Fortran Helmholtz-EOS implementation in
 
-\[
-\ln X_i = \ln G_i + Z_i\eta_p + N_i\eta_n,
-\]
+```text
+src/module_eos_helmholtz.f90
+```
 
-with the density, temperature, mass, and Coulomb contributions included in the species-dependent prefactor.
+with the main interfaces
 
-The two nonlinear constraints
+```fortran
+init_eos
+eos_all
+eos_get_misc
+eos_get_temp_from_pres
+eos_get_temp_from_eps
+```
 
-\[
-\sum_i X_i = 1,
-\qquad
-\sum_i \frac{Z_i}{A_i}X_i=Y_e
-\]
+The EOS can be evaluated using NSE-derived quantities such as
 
-are solved with a damped Newton iteration. Exponentials are evaluated relative to the largest logarithmic abundance to reduce overflow and underflow.
+```text
+Ye
+total ion abundance
+average nuclear mass excess per baryon
+```
 
-For sparse nuclear sets, the Jacobian can become poorly conditioned when a trial composition is dominated by a single nucleus. The two-nuclei initial-guess fallback is useful in this regime.
+in addition to density and temperature.
 
-## Validation
+The Helmholtz table itself is not distributed with this repository and must be supplied separately.
 
-Useful checks for a converged solution are
+## CompOSE-style NSE + Helmholtz table
 
-\[
-\sum_i X_i \simeq 1,
-\qquad
+The current development driver
+
+```text
+src/make_compose_helmholtz.f90
+```
+
+constructs a three-dimensional table on
+
+$$
+(n_b,T,Y_q).
+$$
+
+The density and temperature grids are logarithmic, while the \(Y_q\) grid is linear.
+
+The current implementation uses
+
+```text
+nuclear masses:       WinVNE
+statistical weights:  HS with WinVNE fallback
+species set:           legacy large NSE set
+```
+
+at every grid point.
+
+For each point it
+
+1. solves NSE,
+2. checks baryon-number and charge conservation,
+3. computes composition moments,
+4. evaluates the Helmholtz EOS,
+5. constructs the CompOSE thermodynamic quantities,
+6. writes thermodynamic and composition arrays to HDF5.
+
+The density conversion is
+
+$$
+\rho=m_u n_b,
+$$
+
+with \(n_b\) expressed in \(\mathrm{fm}^{-3}\).
+
+### Thermodynamic quantities
+
+The table generator currently constructs the CompOSE quantities
+
+```text
+Q1 ... Q7
+cs2
+```
+
+including
+
+$$
+Q_1=\frac{P}{n_b},
+$$
+
+the entropy per baryon,
+
+$$
+Q_2=S,
+$$
+
+and the normalized internal/free-energy quantities.
+
+The chemical-potential quantities are reconstructed consistently from the free energy. In particular,
+
+$$
+\mu_l =
+\left.
+\frac{\partial F_b}{\partial Y_q}
+\right|_{n_b,T}
+$$
+
+is evaluated numerically along the equally spaced \(Y_q\) grid.
+
+The composition output includes
+
+```text
+Ye
+Yn
+Yp
+YH2
+YH3
+YHe3
+YHe4
+Ynuc
+Anuc
+Znuc
+Abar
+```
+
+## Parameter file for `make_compose_helmholtz`
+
+The driver expects a text parameter file containing alternating comment/header and value lines.
+
+A template is
+
+```text
+# WinVNE nuclear data
+data/winvn_v2.0.dat
+
+# Rauscher partition-function table
+/path/to/rauscher.dat
+
+# HS nuclear-data file
+/path/to/hs_nuclear_data.bin
+
+# Helmholtz EOS table
+/path/to/helm_table.dat
+
+# output HDF5 file
+helmholtz_nse.h5
+
+# nnb, nb_min [fm^-3], nb_max [fm^-3]
+326 1.0e-12 1.0
+
+# nt, T_min [MeV], T_max [MeV]
+80 0.1 100.0
+
+# nyq, Yq_min, Yq_max
+60 0.01 0.60
+```
+
+The actual ranges and resolutions should be chosen for the intended EOS application.
+
+The \(Y_q\) grid must contain at least three points because the current calculation of the chemical potentials uses a three-point derivative.
+
+Run with
+
+```bash
+./bin/a.out parameters.dat
+```
+
+## Build
+
+The current development makefile uses the HDF5 Fortran compiler wrapper
+
+```text
+h5fc
+```
+
+and therefore requires a Fortran compiler and an HDF5 installation with Fortran support.
+
+The intended build command is
+
+```bash
+make
+```
+
+with the executable written to
+
+```text
+bin/a.out
+```
+
+### Current development-tree note
+
+The makefile is presently a development makefile rather than a stable build system. The active source driver is selected directly in the `SRC` definitions.
+
+At the current state of the repository, the default target also references
+
+```text
+src/module_compose_hdf5.f90
+```
+
+which is not yet tracked in the repository. Consequently the current `main` branch is not yet a fully self-contained build of `make_compose_helmholtz`.
+
+Several older development drivers also predate the recent NSE API refactor and may require updating before compilation.
+
+## Numerical checks
+
+For every converged NSE solution, the primary consistency checks are
+
+$$
+\sum_i X_i \simeq 1
+$$
+
+and
+
+$$
 \sum_i \frac{Z_i}{A_i}X_i \simeq Y_e.
-\]
+$$
 
-Additional validation quantities include
+The CompOSE-table driver checks these conditions explicitly and aborts if their errors exceed the prescribed tolerance.
+
+Other useful diagnostics include
 
 ```text
 Abar
-mexc/b
-Coulomb energy/b
-free n/p/alpha abundances
+total ion abundance
+mass excess per baryon
+free neutron abundance
+free proton abundance
+alpha-particle abundance
 heavy-nucleus moments
-dominant nuclei
+Coulomb energy
 ```
 
-The refactor from module-global nuclear-set data to `nse_network_t` was regression-tested against the previous large-NSE implementation, reproducing the tested output exactly.
+## Energy convention
 
-## Development notes
+The NSE calculation uses bare nuclear masses.
 
-The repository also contains drivers used to compare
+When the average nuclear mass excess is passed to the Helmholtz EOS or compared with charge-neutral tabulated EOS data, the electron rest-mass contribution
 
-- the large NSE set with the reduced `aprox21` NSE set,
-- NSE quantities with CompOSE/tabulated-EOS quantities,
-- NSE compositions with Helmholtz-EOS thermodynamics.
+$$
+Y_e m_e c^2
+$$
 
-These are currently research/development utilities rather than a stable command-line interface.
+is added back to the nuclear mass excess.
+
+This convention is important when comparing NSE + Helmholtz quantities with tables such as DD2/CompOSE.
+
+## Development status
+
+This repository is currently being used to develop and test
+
+* robust NSE solution methods over large EOS grids,
+* alternative nuclear-mass prescriptions,
+* alternative nuclear statistical-weight prescriptions,
+* consistency between NSE and tabulated nuclear EOS data,
+* Helmholtz-EOS treatment outside the tabulated-NSE regime,
+* generation of CompOSE-format EOS tables.
+
+The code should therefore currently be regarded as research/development software rather than a stable public library.
