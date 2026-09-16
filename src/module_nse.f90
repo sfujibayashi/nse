@@ -56,7 +56,9 @@ module module_nse
     
  end type nse_network_t
 
-  public :: nse_network_t
+ public :: nse_network_t
+
+ real(8), parameter :: temp_nuc_max_mev = 50.d0
 
 contains
   
@@ -332,7 +334,9 @@ contains
     use module_stat_weight_policy, only: &
          STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER
     use module_stat_weight_HS, only: get_stat_weight_HS
-
+    
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    
     type(nse_network_t), intent(in) :: net
     real(8),intent(in)  :: t9
     real(8),intent(out) :: g(net%n_spec)
@@ -357,7 +361,7 @@ contains
           
           call get_stat_weight_HS( &
                t9, net%a(i), net%z(i), net%n(i), net%mexc(i), g(i))
-          
+
        case default
           
           write(*,*) "ERROR: unresolved statistical weight for ", &
@@ -365,6 +369,12 @@ contains
           error stop
           
        end select
+
+       if (.not. ieee_is_finite(g(i)) .or. g(i) <= 0.d0) then
+          write(*,*) "ERROR: invalid HS statistical weight:", &
+               net%a(i), net%z(i), t9, g(i)
+          error stop
+       endif
 
     enddo
 
@@ -657,7 +667,7 @@ contains
        xnse, nsefail, itr_out, err_out, &
        xn_guess, xp_guess, xn_out, xp_out, dlogye_dv_out)
 
-    use const, only : mu, kerg, pi, hbar, mev2erg, mumev
+    use const, only : mu, kerg, pi, hbar, mev2erg, mumev, mev2k
 
     implicit none
 
@@ -717,8 +727,7 @@ contains
     if (present(itr_out)) itr_out = 0
     if (present(err_out)) err_out = huge(1d0)
     if (present(dlogye_dv_out)) dlogye_dv_out = 0d0
-
-
+    
     if (rho <= 0d0) then
        write(*,*) "ERROR in calc_nse_nested_1d: rho <= 0"
        nsefail = .true.
@@ -737,6 +746,23 @@ contains
        return
     endif
 
+
+    if (temp/mev2k > temp_nuc_max_mev) then
+       
+       kn = find_nucleus(net, 1, 0)
+       kp = find_nucleus(net, 1, 1)
+       
+       xnse(kn) = 1.d0 - ye
+       xnse(kp) = ye
+       
+       nsefail = .false.
+       
+       if (present(itr_out)) itr_out = 0
+       if (present(err_out)) err_out = 0.d0
+       
+       return
+       
+    endif
 
     ! ------------------------------------------------------------
     ! Construct the same logge(:) as calc_nse().
@@ -757,6 +783,7 @@ contains
        g(:) = net%g0(:)
        fcoul(:) = 0d0
     endif
+
 
     logge(:) = log(g(:)) &
          + log(net%a(:)) &
@@ -928,7 +955,6 @@ contains
 
     do itr = 1, itrlim
        u_seed = u
-       write(6,*) itr, u_seed
        call nse_solve_u_for_v(net, logge, v, u_seed, tol, itrlim, &
             u, xnse, fmass, logye_calc, dlogye_dv, &
             iinner, inner_fail)
@@ -939,6 +965,8 @@ contains
        endif
 
        fv = logye_calc - log(ye)
+
+       !write(6,*) itr, u_seed, fv, logye_calc, dlogye_dv
 
        if (present(itr_out)) itr_out = itr
 
@@ -2029,7 +2057,7 @@ contains
 
 
     logx(:) = logge(:) + net%a(:)*u + net%z(:)*v
-
+    
     logx_max = maxval(logx(:))
 
     w(:) = exp(logx(:) - logx_max)
@@ -2039,7 +2067,6 @@ contains
     x(:) = w(:)/wsum
 
     fmass = logx_max + log(wsum)
-
 
     ! ------------------------------------------------------------
     ! Ye = sum_i (Z_i/A_i) X_i
@@ -2076,7 +2103,6 @@ contains
     csum = sum(cw(:))
 
     logye_calc = logq_max + log(csum) - fmass
-
 
     ! ------------------------------------------------------------
     ! Along the normalization surface sum X_i = 1,

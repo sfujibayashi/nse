@@ -73,15 +73,38 @@ contains
     real(8) :: val
 
     real(8) :: cc, s0, s1
+    real(8) :: derf, term1, term2, xexp
 
     cc = temp*sqrt(aa/2d0)
 
     s0 = -sqrt(aa*temp/2d0)
     s1 = (sqrt(emax)-cc)/sqrt(temp)
 
-    val = exp(aa*temp/2d0) * &
-         (cc*sqrt(pi*temp)*(erf(s1)-erf(s0)) &
-         + temp*(exp(-s0*s0)-exp(-s1*s1)))
+    if (s0 < 0d0 .and. s1 < 0d0) then
+       derf = erfc(-s1) - erfc(-s0)
+    elseif (s0 > 0d0 .and. s1 > 0d0) then
+       derf = erfc(s0) - erfc(s1)
+    else
+       derf = erf(s1) - erf(s0)
+    endif
+    
+    term1 = cc*sqrt(pi*temp)*derf
+    term2 = temp*(exp(-s0*s0)-exp(-s1*s1))
+
+    xexp = aa*temp/2.d0
+    
+    if (xexp > log(huge(1.d0)) - 10.d0) then
+       write(*,*) "ERROR: HS partition function exponent too large", &
+            aa, temp, xexp
+       error stop
+    endif
+
+    val = exp(aa*temp/2.d0) * (term1 + term2)
+
+    if(val<=0d0)then
+       write(6,*) "val<0.0", temp, aa, emax, s0, s1, term1, term2, term1+term2
+       error stop
+    endif
 
   end function excited_HS
 
