@@ -926,7 +926,7 @@ contains
     v = 0.5d0*(vlo + vhi)
 
     do itr = 1, itrlim
-
+       write(6,*) itr
        call nse_solve_u_for_v(net, logge, v, u, tol, itrlim, &
             u, xnse, fmass, logye_calc, dlogye_dv, &
             iinner, inner_fail)

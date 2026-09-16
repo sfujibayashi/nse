@@ -14,9 +14,9 @@ program make_compose_helmholtz
   use const, only: mu, mev2erg, mev2k, clight, mumev, mnmev, mpmev, memev
   implicit none
 
-  integer, parameter :: itrlim = 500
-  real(8), parameter :: tol = 1.d-8
-  real(8), parameter :: norm_tol = 1.d-8
+  integer, parameter :: itrlim = 300
+  real(8), parameter :: tol = 1.d-10
+  real(8), parameter :: norm_tol = 1.d-10
 
   character(512) :: fn_para
   character(512) :: fn_winv, fn_rauscher, fn_hs, fn_helm, fn_out
@@ -130,12 +130,6 @@ program make_compose_helmholtz
                    xnse, nsefail, &
                    itr_out=itr_out, err_out=err_out, &
                    xn_out=xn_out, xp_out=xp_out)
-
-              ! call calc_nse(net, rho, temp_k, ye, itrlim, tol, &
-              !      xnse, nsefail, .false., &
-              !      itr_out=itr_out, err_out=err_out, &
-              !      xn_out=xn_out, xp_out=xp_out)
-
            else
               call calc_nse_nested_1d( &
                    net, rho, temp_k, ye, itrlim, tol, &
@@ -144,14 +138,20 @@ program make_compose_helmholtz
                    xn_guess=xn_guess, xp_guess=xp_guess, &
                    xn_out=xn_out, xp_out=xp_out)
 
-              ! call calc_nse(net, rho, temp_k, ye, itrlim, tol, &
-              !      xnse, nsefail, .false., &
-              !      itr_out=itr_out, err_out=err_out, &
-              !      xn_guess=xn_guess, xp_guess=xp_guess, &
-              !      xn_out=xn_out, xp_out=xp_out)
-
-
            endif
+
+           ! if (inb == 1) then
+           !    call calc_nse(net, rho, temp_k, ye, itrlim, tol, &
+           !         xnse, nsefail, .false., &
+           !         itr_out=itr_out, err_out=err_out, &
+           !         xn_out=xn_out, xp_out=xp_out)
+           ! else
+           !    call calc_nse(net, rho, temp_k, ye, itrlim, tol, &
+           !         xnse, nsefail, .false., &
+           !         itr_out=itr_out, err_out=err_out, &
+           !         xn_guess=xn_guess, xp_guess=xp_guess, &
+           !         xn_out=xn_out, xp_out=xp_out)
+           ! endif
 
            ! if (nsefail) then
            !    fallback_count = fallback_count + 1
