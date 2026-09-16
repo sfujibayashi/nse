@@ -120,11 +120,10 @@ program make_compose_helmholtz
   !$omp   yn, yp, yh2, yh3, yhe3, yhe4, ynuc, anuc, znuc, abar) &
   !$omp private(ye, temp_k, rho, xnse, nsefail, itr_out, err_out, xn_out, xp_out, xn_guess, xp_guess, &
   !$omp   mexc, ytot, charge_sum, baryon_sum, max_baryon_err, max_charge_err, eps, pres, cs2_cgs, entr, eta_e)
-  !$omp do
+  !$omp do collapse(2) schedule(dynamic,1)
   do iyq = 1, nyq
-     ye = yq(iyq)
-
      do it = 1, nt
+        ye = yq(iyq)
         temp_k = t(it) * mev2k
 
         do inb = 1, nnb
