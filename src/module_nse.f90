@@ -722,7 +722,8 @@ contains
     integer, parameter :: max_bracket = 200
     real(8), parameter :: deriv_min = 1d-14
 
-    tol_inner = tol * 1d-2
+    tol_inner = max(tol * 1d-2, 100d0*epsilon(1d0))
+    !tol_inner = tol
 
     nsefail = .false.
     xnse(:) = 0d0
@@ -838,7 +839,7 @@ contains
     call nse_solve_u_for_v(net, logge, v0, u0, tol_inner, itrlim, &
          u, xnse, fmass, logye_calc, dlogye_dv, &
          iinner, inner_fail)
-
+    write(*,*) "inner iterations =", iinner
     if (inner_fail) then
        nsefail = .true.
        return
@@ -887,7 +888,7 @@ contains
           call nse_solve_u_for_v(net, logge, vhi, u_seed, tol_inner, itrlim, &
                u, xnse, fmass, logye_calc, dlogye_dv, &
                iinner, inner_fail)
-
+          write(*,*) "inner iterations =", iinner
           if (inner_fail) then
              nsefail = .true.
              return
@@ -925,7 +926,7 @@ contains
           call nse_solve_u_for_v(net, logge, vlo, u_seed, tol_inner, itrlim, &
                u, xnse, fmass, logye_calc, dlogye_dv, &
                iinner, inner_fail)
-
+          write(*,*) "inner iterations =", iinner
           if (inner_fail) then
              nsefail = .true.
              return
@@ -963,7 +964,7 @@ contains
        call nse_solve_u_for_v(net, logge, v, u_seed, tol_inner, itrlim, &
             u, xnse, fmass, logye_calc, dlogye_dv, &
             iinner, inner_fail)
-
+       write(*,*) "inner iterations =", iinner
        if (inner_fail) then
           nsefail = .true.
           return
@@ -973,7 +974,7 @@ contains
        ! ye_calc = exp(logye_calc)
        ! dye_abs = abs(ye_calc - ye)
        
-       if(itr>100)write(6,*) itr, u_seed, fv, logye_calc, dlogye_dv
+       if(itr>100)write(6,*) itr, u, fmass, fv, logye_calc, dlogye_dv
 
        if (present(itr_out)) itr_out = itr
 
