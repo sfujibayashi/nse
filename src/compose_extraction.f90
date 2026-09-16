@@ -2,13 +2,14 @@ program extraction
   use module_nse
   use module_nuclear_data_winvne
   use module_ptf_rauscher
+  use module_nuclear_data_HS
   use module_eos_helmholtz
   use module_stat_weight_policy, only: &
        stat_weight_policy_t, &
        STAT_WEIGHT_NONE, STAT_WEIGHT_WINVNE, STAT_WEIGHT_RAUSCHER, STAT_WEIGHT_HS
   use module_nuclear_mass_policy, only: &
        nuclear_mass_policy_t, &
-       NUCLEAR_MASS_NONE, NUCLEAR_MASS_WINVNE
+       NUCLEAR_MASS_NONE, NUCLEAR_MASS_WINVNE, NUCLEAR_MASS_HS
   use module_nse_species_policy
   
   implicit none
@@ -33,7 +34,7 @@ program extraction
   type(nuclear_mass_policy_t) :: nuclear_mass_policy
   type(nse_species_policy_t) :: species_policy
 
-  iyq_target = 19
+  iyq_target = 35
   it_target = 15
   
   use_TNAguess = .false.
@@ -54,20 +55,30 @@ program extraction
     read(10,*);read(10,'(a)') fn_out
     close(10)
 
-    if (use_rauscher_ptf) then
+    ! if (use_rauscher_ptf) then
 
-       stat_weight_policy%primary  = STAT_WEIGHT_RAUSCHER
-       stat_weight_policy%fallback = STAT_WEIGHT_WINVNE
+    !    stat_weight_policy%primary  = STAT_WEIGHT_RAUSCHER
+    !    stat_weight_policy%fallback = STAT_WEIGHT_WINVNE
 
-    else
+    ! else
 
-       stat_weight_policy%primary  = STAT_WEIGHT_WINVNE
-       stat_weight_policy%fallback = STAT_WEIGHT_NONE
+    !    stat_weight_policy%primary  = STAT_WEIGHT_WINVNE
+    !    stat_weight_policy%fallback = STAT_WEIGHT_NONE
 
-    endif
+    ! endif
 
     nuclear_mass_policy%primary  = NUCLEAR_MASS_WINVNE
     nuclear_mass_policy%fallback = NUCLEAR_MASS_NONE
+
+    stat_weight_policy%primary  = STAT_WEIGHT_HS
+    stat_weight_policy%fallback = STAT_WEIGHT_WINVNE
+
+    ! nuclear_mass_policy%primary  = NUCLEAR_MASS_HS
+    ! nuclear_mass_policy%fallback = NUCLEAR_MASS_WINVNE
+
+    ! stat_weight_policy%primary  = STAT_WEIGHT_HS
+    ! stat_weight_policy%fallback = STAT_WEIGHT_NONE
+
 
     ! species_policy%mode = NSE_SPECIES_ALL_WINVNE
     ! stat_weight_policy%primary  = STAT_WEIGHT_HS
@@ -75,7 +86,9 @@ program extraction
     
     
     call init_winvne(fn_winv)
+    call init_nuclear_data_HS("data/dd2_frdm_comp/dd2_frdm_comp_v1.02.bin")
     call init_ptf_rauscher(fn_raucher)
+    
     call nse_init_winvne(net, stat_weight_policy, species_policy, nuclear_mass_policy)
     call nse_init_aprox21(net_aprox21, stat_weight_policy, nuclear_mass_policy)
 
@@ -103,7 +116,7 @@ program extraction
 
     real(8) :: eps_helm, pres_helm, cs2_helm, entr_helm, E_helm_MeV
     real(8) :: mres_Comp, Fcoul_Comp
-
+    
     open(newunit=unit_com, file="compose.dat", status="replace", action="write")
     open(newunit=unit_nse, file="nse.dat", status="replace", action="write")
     open(newunit=unit_a21, file="nse_aprox21.dat", status="replace", action="write")
@@ -149,7 +162,7 @@ program extraction
        if (it  /= it_target)  cycle
        !if (rho > 1d14)cycle
        !if(temp < 4d9 .or. 1d10 < temp)cycle
-       !if(1d12 < rho)cycle
+       if(1d13 < rho)cycle
 
        npoint = npoint + 1
        

@@ -47,7 +47,7 @@ module module_nse
     
     logical :: use_winvne = .false.
     
-    real(8) :: n0_fm = 0.1583d0
+    real(8) :: n0_fm = 0.149065d0 !0.1583d0
 
     type(stat_weight_policy_t) :: stat_weight_policy
     type(stat_weight_ref_t), allocatable :: stat_weight(:)
@@ -110,6 +110,7 @@ contains
 
     if (.not. valid_nuclear_mass_policy(nuclear_mass_policy)) then
        write(*,*) "ERROR: invalid nuclear-mass policy"
+       write(*,*) nuclear_mass_policy%primary, nuclear_mass_policy%fallback
        error stop
     endif
 
@@ -186,6 +187,7 @@ contains
 
     if (.not. valid_nuclear_mass_policy(nuclear_mass_policy)) then
        write(*,*) "ERROR: invalid nuclear-mass policy"
+       write(*,*) nuclear_mass_policy%primary, nuclear_mass_policy%fallback
        error stop
     endif
 
