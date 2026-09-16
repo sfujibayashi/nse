@@ -5,7 +5,7 @@ PROG:=$(EXE_DIR)a.out
 
 FC := h5fc
 FFLAGS := -ffree-line-length-none #-mcmodel=large 
-FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized #-ffpe-trap=invalid,zero,overflow,underflow
+FFLAGS += -Wall -fbounds-check -O  -fbacktrace -g  -Wuninitialized -fopenmp #-ffpe-trap=invalid,zero,overflow,underflow
 
 #FC:=/data/home/sfujibayashi/libs/hdf5-intel/bin/h5fc
 # FC:=ifort

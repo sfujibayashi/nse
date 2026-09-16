@@ -58,7 +58,7 @@ module module_nse
 
  public :: nse_network_t
 
- real(8), parameter :: temp_nuc_max_mev = 50.d0
+ real(8), parameter :: temp_nuc_max_mev = 30.d0
 
 contains
   
