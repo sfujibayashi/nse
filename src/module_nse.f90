@@ -652,6 +652,359 @@ contains
 
   end subroutine calc_nse
 
+  
+  subroutine calc_nse_nested_1d(net, rho, temp, ye, itrlim, tol, &
+       xnse, nsefail, itr_out, err_out, &
+       xn_guess, xp_guess, xn_out, xp_out, dlogye_dv_out)
+
+    use const, only : mu, kerg, pi, hbar, mev2erg, mumev
+
+    implicit none
+
+    type(nse_network_t), intent(in) :: net
+
+    real(8), intent(in) :: rho, temp, ye
+    integer, intent(in) :: itrlim
+    real(8), intent(in) :: tol
+
+    real(8), intent(out) :: xnse(net%n_spec)
+    logical, intent(out) :: nsefail
+
+    integer, intent(out), optional :: itr_out
+    real(8), intent(out), optional :: err_out
+
+    real(8), intent(in), optional :: xn_guess, xp_guess
+
+    real(8), intent(out), optional :: xn_out, xp_out
+    real(8), intent(out), optional :: dlogye_dv_out
+
+
+    real(8) :: logrho0
+    real(8) :: logge(net%n_spec)
+    real(8) :: fcoul(net%n_spec)
+    real(8) :: g(net%n_spec)
+
+    real(8) :: t9
+
+    real(8) :: u, v
+    real(8) :: u0, v0
+
+    real(8) :: vlo, vhi
+    real(8) :: flo, fhi, fv
+    real(8) :: fmass
+    real(8) :: logye_calc
+    real(8) :: dlogye_dv
+
+    real(8) :: vnew
+    real(8) :: step
+
+    real(8) :: xn0, xp0
+
+    integer :: kn, kp
+    integer :: ib, itr
+    integer :: iinner
+
+    logical :: inner_fail
+
+    integer, parameter :: max_bracket = 200
+    real(8), parameter :: deriv_min = 1d-14
+
+
+    nsefail = .false.
+    xnse(:) = 0d0
+
+    if (present(itr_out)) itr_out = 0
+    if (present(err_out)) err_out = huge(1d0)
+    if (present(dlogye_dv_out)) dlogye_dv_out = 0d0
+
+
+    if (rho <= 0d0) then
+       write(*,*) "ERROR in calc_nse_nested_1d: rho <= 0"
+       nsefail = .true.
+       return
+    endif
+
+    if (temp <= 0d0) then
+       write(*,*) "ERROR in calc_nse_nested_1d: temp <= 0"
+       nsefail = .true.
+       return
+    endif
+
+    if (ye <= 0d0 .or. ye >= 1d0) then
+       write(*,*) "ERROR in calc_nse_nested_1d: Ye must satisfy 0 < Ye < 1"
+       nsefail = .true.
+       return
+    endif
+
+
+    ! ------------------------------------------------------------
+    ! Construct the same logge(:) as calc_nse().
+    ! ------------------------------------------------------------
+
+    logrho0 = 2.5d0*log(mu) &
+         + 1.5d0*log(kerg*temp) &
+         - 1.5d0*log(2d0*pi) &
+         - 3d0*log(hbar) &
+         - log(rho)
+
+    t9 = temp/1d9
+
+    if (net%use_winvne) then
+       call calc_ptf_nse(net, t9, g)
+       call calc_coulomb_HS(net, rho, ye, fcoul)
+    else
+       g(:) = net%g0(:)
+       fcoul(:) = 0d0
+    endif
+
+    logge(:) = log(g(:)) &
+         + log(net%a(:)) &
+         + 1.5d0*log(net%mass(:)/mumev) &
+         + logrho0 &
+         - net%mexc(:)*mev2erg/(kerg*temp) &
+         - fcoul(:)*mev2erg/(kerg*temp)
+
+
+    ! ------------------------------------------------------------
+    ! Initial guess.
+    !
+    ! u = eta_n
+    ! v = eta_p - eta_n
+    ! ------------------------------------------------------------
+
+    if (present(xn_guess) .and. present(xp_guess)) then
+
+       u0 = xn_guess
+       v0 = xp_guess - xn_guess
+
+    else
+
+       kn = find_nucleus(net, 1, 0)
+       kp = find_nucleus(net, 1, 1)
+
+       if (kn > 0 .and. kp > 0) then
+
+          xn0 = -2d0*log(10d0) - logge(kn)
+          xp0 = -2d0*log(10d0) - logge(kp)
+
+          u0 = xn0
+          v0 = xp0 - xn0
+
+       else
+
+          u0 = 0d0
+          v0 = 0d0
+
+       endif
+
+    endif
+
+
+    ! ------------------------------------------------------------
+    ! First evaluation at v0.
+    ! ------------------------------------------------------------
+
+    call nse_solve_u_for_v(net, logge, v0, u0, tol, itrlim, &
+         u, xnse, fmass, logye_calc, dlogye_dv, &
+         iinner, inner_fail)
+
+    if (inner_fail) then
+       nsefail = .true.
+       return
+    endif
+
+    fv = logye_calc - log(ye)
+
+    if (present(err_out)) then
+       err_out = max(abs(fmass), abs(fv))
+    endif
+
+    if (abs(fv) < tol) then
+
+       v = v0
+
+       if (present(xn_out)) xn_out = u
+       if (present(xp_out)) xp_out = u + v
+       if (present(dlogye_dv_out)) dlogye_dv_out = dlogye_dv
+
+       return
+
+    endif
+
+
+    ! ------------------------------------------------------------
+    ! Bracket the outer root in v.
+    !
+    ! Ye(v) is monotonic non-decreasing.
+    ! ------------------------------------------------------------
+
+    step = 1d0
+
+    if (fv < 0d0) then
+
+       ! Need larger Ye -> increase v.
+
+       vlo = v0
+       flo = fv
+
+       vhi = v0 + step
+
+       do ib = 1, max_bracket
+
+          call nse_solve_u_for_v(net, logge, vhi, u, tol, itrlim, &
+               u, xnse, fmass, logye_calc, dlogye_dv, &
+               iinner, inner_fail)
+
+          if (inner_fail) then
+             nsefail = .true.
+             return
+          endif
+
+          fhi = logye_calc - log(ye)
+
+          if (fhi >= 0d0) exit
+
+          vlo = vhi
+          flo = fhi
+
+          step = 2d0*step
+          vhi = vhi + step
+
+       enddo
+
+       if (fhi < 0d0) then
+          write(*,*) "ERROR: failed to bracket outer NSE root"
+          nsefail = .true.
+          return
+       endif
+
+    else
+
+       ! Need smaller Ye -> decrease v.
+
+       vhi = v0
+       fhi = fv
+
+       vlo = v0 - step
+
+       do ib = 1, max_bracket
+
+          call nse_solve_u_for_v(net, logge, vlo, u, tol, itrlim, &
+               u, xnse, fmass, logye_calc, dlogye_dv, &
+               iinner, inner_fail)
+
+          if (inner_fail) then
+             nsefail = .true.
+             return
+          endif
+
+          flo = logye_calc - log(ye)
+
+          if (flo <= 0d0) exit
+
+          vhi = vlo
+          fhi = flo
+
+          step = 2d0*step
+          vlo = vlo - step
+
+       enddo
+
+       if (flo > 0d0) then
+          write(*,*) "ERROR: failed to bracket outer NSE root"
+          nsefail = .true.
+          return
+       endif
+
+    endif
+
+
+    ! ------------------------------------------------------------
+    ! Safeguarded Newton iteration for outer variable v.
+    ! ------------------------------------------------------------
+
+    v = 0.5d0*(vlo + vhi)
+
+    do itr = 1, itrlim
+
+       call nse_solve_u_for_v(net, logge, v, u, tol, itrlim, &
+            u, xnse, fmass, logye_calc, dlogye_dv, &
+            iinner, inner_fail)
+
+       if (inner_fail) then
+          nsefail = .true.
+          return
+       endif
+
+       fv = logye_calc - log(ye)
+
+       if (present(itr_out)) itr_out = itr
+
+       if (present(err_out)) then
+          err_out = max(abs(fmass), abs(fv))
+       endif
+
+       if (present(dlogye_dv_out)) then
+          dlogye_dv_out = dlogye_dv
+       endif
+
+
+       if (abs(fv) < tol) then
+
+          if (present(xn_out)) xn_out = u
+          if (present(xp_out)) xp_out = u + v
+
+          return
+
+       endif
+
+
+       ! Update bracket.
+
+       if (fv < 0d0) then
+
+          vlo = v
+          flo = fv
+
+       else
+
+          vhi = v
+          fhi = fv
+
+       endif
+
+
+       ! Newton candidate.
+
+       if (dlogye_dv > deriv_min) then
+
+          vnew = v - fv/dlogye_dv
+
+          ! If Newton leaves the bracket, use bisection.
+          if (vnew <= vlo .or. vnew >= vhi) then
+             vnew = 0.5d0*(vlo + vhi)
+          endif
+
+       else
+
+          ! Near-singular / plateau region:
+          ! do not divide by a tiny derivative.
+          vnew = 0.5d0*(vlo + vhi)
+
+       endif
+
+       v = vnew
+
+    enddo
+
+
+    nsefail = .true.
+
+    if (present(xn_out)) xn_out = u
+    if (present(xp_out)) xp_out = u + v
+
+  end subroutine calc_nse_nested_1d
+
   subroutine calc_nse_with_guess(net, rho,temp,ye,itrlim,tol,xnse,nsefail,xn_guess,xp_guess,xn_history,xp_history,itr_out,err_out,xn_out,xp_out)
     use const,only : mu,kerg,pi,hbar,mev2erg, mumev
     use module_nuclear_data_winvne
