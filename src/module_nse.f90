@@ -688,6 +688,7 @@ contains
     real(8), intent(out), optional :: xn_out, xp_out
     real(8), intent(out), optional :: dlogye_dv_out
 
+    real(8) :: tol_inner
 
     real(8) :: logrho0
     real(8) :: logge(net%n_spec)
@@ -705,6 +706,7 @@ contains
     real(8) :: fmass
     real(8) :: logye_calc
     real(8) :: dlogye_dv
+    real(8) :: ye_calc, dye_abs
 
     real(8) :: vnew
     real(8) :: step
@@ -720,6 +722,7 @@ contains
     integer, parameter :: max_bracket = 200
     real(8), parameter :: deriv_min = 1d-14
 
+    tol_inner = tol * 1d-2
 
     nsefail = .false.
     xnse(:) = 0d0
@@ -832,7 +835,7 @@ contains
     ! First evaluation at v0.
     ! ------------------------------------------------------------
 
-    call nse_solve_u_for_v(net, logge, v0, u0, tol, itrlim, &
+    call nse_solve_u_for_v(net, logge, v0, u0, tol_inner, itrlim, &
          u, xnse, fmass, logye_calc, dlogye_dv, &
          iinner, inner_fail)
 
@@ -842,6 +845,8 @@ contains
     endif
 
     fv = logye_calc - log(ye)
+    !ye_calc = exp(logye_calc)
+    !dye_abs = abs(ye_calc - ye)
 
     if (present(err_out)) then
        err_out = max(abs(fmass), abs(fv))
@@ -879,7 +884,7 @@ contains
 
        do ib = 1, max_bracket
           u_seed = u
-          call nse_solve_u_for_v(net, logge, vhi, u_seed, tol, itrlim, &
+          call nse_solve_u_for_v(net, logge, vhi, u_seed, tol_inner, itrlim, &
                u, xnse, fmass, logye_calc, dlogye_dv, &
                iinner, inner_fail)
 
@@ -917,7 +922,7 @@ contains
 
        do ib = 1, max_bracket
           u_seed = u
-          call nse_solve_u_for_v(net, logge, vlo, u_seed, tol, itrlim, &
+          call nse_solve_u_for_v(net, logge, vlo, u_seed, tol_inner, itrlim, &
                u, xnse, fmass, logye_calc, dlogye_dv, &
                iinner, inner_fail)
 
@@ -955,7 +960,7 @@ contains
 
     do itr = 1, itrlim
        u_seed = u
-       call nse_solve_u_for_v(net, logge, v, u_seed, tol, itrlim, &
+       call nse_solve_u_for_v(net, logge, v, u_seed, tol_inner, itrlim, &
             u, xnse, fmass, logye_calc, dlogye_dv, &
             iinner, inner_fail)
 
@@ -965,8 +970,10 @@ contains
        endif
 
        fv = logye_calc - log(ye)
-
-       !write(6,*) itr, u_seed, fv, logye_calc, dlogye_dv
+       ! ye_calc = exp(logye_calc)
+       ! dye_abs = abs(ye_calc - ye)
+       
+       if(itr>100)write(6,*) itr, u_seed, fv, logye_calc, dlogye_dv
 
        if (present(itr_out)) itr_out = itr
 
@@ -1029,6 +1036,8 @@ contains
 
 
     nsefail = .true.
+    write(6,*) "itr > itrlim",itr
+
 
     if (present(xn_out)) xn_out = u
     if (present(xp_out)) xp_out = u + v
