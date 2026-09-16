@@ -221,6 +221,9 @@ program make_compose_helmholtz
            ! chemical potential used by CompOSE.
            mue(it,iyq,inb) = memev + eta_e * t(it)
 
+           ! write(6,'(99es12.4)') yn(it,iyq,inb), yp(it,iyq,inb), ynuc(it,iyq,inb)*anuc(it,iyq,inb), anuc(it,iyq,inb), &
+           !      znuc(it,iyq,inb), abar(it,iyq,inb)
+
         enddo
 
         write(*,'(a,2i6,a,es12.4,a,es12.4)') &
