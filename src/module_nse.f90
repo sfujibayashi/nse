@@ -440,7 +440,7 @@ contains
 
   
   subroutine calc_nse(net, rho,temp,ye,itrlim,tol,xnse,nsefail,use_TNAguess,xn_history,xp_history,itr_out,err_out,xn_guess,xp_guess,xn_out,xp_out)
-    use const,only : mu,kerg,pi,hbar,mev2erg
+    use const,only : mu,kerg,pi,hbar,mev2erg,mumev
     use module_nuclear_data_winvne
     type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,temp,ye
@@ -487,7 +487,7 @@ contains
        fcoul(:) = 0d0
     endif
     !
-    logge(:) = log(g(:)) + 2.5d0*log(net%a(:)) + logrho0 - net%mexc(:)*mev2erg/(kerg*temp) &
+    logge(:) = log(g(:)) + log(net%a(:)) + 1.5d0*log(net%mass(:)/mumev) + logrho0 - net%mexc(:)*mev2erg/(kerg*temp) &
          - fcoul(:)*mev2erg/(kerg*temp)
     
     if(present(xn_history)) xn_history(:) = 0d0
@@ -653,7 +653,7 @@ contains
   end subroutine calc_nse
 
   subroutine calc_nse_with_guess(net, rho,temp,ye,itrlim,tol,xnse,nsefail,xn_guess,xp_guess,xn_history,xp_history,itr_out,err_out,xn_out,xp_out)
-    use const,only : mu,kerg,pi,hbar,mev2erg
+    use const,only : mu,kerg,pi,hbar,mev2erg, mumev
     use module_nuclear_data_winvne
     type(nse_network_t),intent(in) :: net
     real(8),intent(in) :: rho,temp,ye
@@ -699,7 +699,7 @@ contains
        fcoul(:) = 0d0
     endif
     !
-    logge(:) = log(g(:)) + 2.5d0*log(net%a(:)) + logrho0 - net%mexc(:)*mev2erg/(kerg*temp) &
+    logge(:) = log(g(:)) + log(net%a(:)) + 1.5d0*log(net%mass(:)/mumev) + logrho0 - net%mexc(:)*mev2erg/(kerg*temp) &
          - fcoul(:)*mev2erg/(kerg*temp)
     
     nsefail = .false.
