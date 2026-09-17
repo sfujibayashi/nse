@@ -118,7 +118,7 @@ program make_compose_helmholtz
   write(*,'(a,i0)') "NSE species = ", net%n_spec
 
   open(newunit=u_summary, file= "summary.dat", status="replace", action="write")
-
+  write(u_summary, '("#",99a20)') "nb", "T", "Ye", "xn", "xp", "Yn", "Yp", "YN*AN", "AN", "ZN", "Abar", "Ytot", "mexc/b", "Ecoul/b", "Eexci/b", "eps_helm", "eps_total", "s/k"
   !$omp parallel default(none) &
   !$omp shared(net, u_summary, nyq, nt, nnb, yq, t, nb, ye_tab, q1, q2, q7, q6, cs2, mue, &
   !$omp   yn, yp, yh2, yh3, yhe3, yhe4, ynuc, anuc, znuc, abar) &
@@ -240,8 +240,8 @@ program make_compose_helmholtz
            ! chemical potential used by CompOSE.
            mue(it,iyq,inb) = memev + eta_e * t(it)
 
-           write(u_summary,'(99es20.10e3)') nb(inb), t(it), ye, xn_out, xp_out, yn(it,iyq,inb), yp(it,iyq,inb), ynuc(it,iyq,inb)*anuc(it,iyq,inb), anuc(it,iyq,inb), &
-                znuc(it,iyq,inb), abar(it,iyq,inb), ytot, mexc, ecoul_ave, eexci_ave, eps_helm, eps
+           write(u_summary,'(" ",99es20.10e3)') nb(inb), t(it), ye, xn_out, xp_out, yn(it,iyq,inb), yp(it,iyq,inb), ynuc(it,iyq,inb)*anuc(it,iyq,inb), anuc(it,iyq,inb), &
+                znuc(it,iyq,inb), abar(it,iyq,inb), ytot, mexc, ecoul_ave, eexci_ave, eps_helm, eps, entr
 
         enddo
 
