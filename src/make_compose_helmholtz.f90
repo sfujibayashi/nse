@@ -1,5 +1,5 @@
 program make_compose_helmholtz
-  use module_nse, only: nse_network_t, calc_nse, nse_init_winvne, calc_nse_nested_1d
+  use module_nse, only: nse_network_t, calc_nse, nse_init_winvne, calc_nse_nested_1d, calc_coulomb_average, calc_excitation_average
   use module_nuclear_data_winvne, only: init_winvne
   use module_ptf_rauscher, only: init_ptf_rauscher
   use module_nuclear_data_HS, only: init_nuclear_data_HS
@@ -23,6 +23,7 @@ program make_compose_helmholtz
 
   integer :: nnb, nt, nyq
   real(8) :: nb_min, nb_max, t_min, t_max, yq_min, yq_max
+  logical :: validation_single_yq
 
   real(8), allocatable :: nb(:), t(:), yq(:)
   real(8), allocatable :: q1(:,:,:), q2(:,:,:), q3(:,:,:), q4(:,:,:)
@@ -45,9 +46,11 @@ program make_compose_helmholtz
   real(8) :: err_out, xn_guess, xp_guess, xn_out, xp_out
   real(8) :: rho, temp_k, ye
   real(8) :: mexc, ytot
-  real(8) :: eps, pres, cs2_cgs, entr, eta_e
+  real(8) :: eps, pres, cs2_cgs, entr, eta_e, eps_helm
   real(8) :: baryon_sum, charge_sum
   real(8) :: max_baryon_err, max_charge_err
+
+  real(8) :: ecoul_ave, eexci_ave
 
   integer :: u_summary
 
@@ -59,10 +62,11 @@ program make_compose_helmholtz
 
   call read_parameter_file(trim(fn_para), &
        fn_winv, fn_rauscher, fn_hs, fn_helm, fn_out, &
-       nnb, nb_min, nb_max, nt, t_min, t_max, nyq, yq_min, yq_max)
+       nnb, nb_min, nb_max, nt, t_min, t_max, nyq, yq_min, yq_max, &
+       validation_single_yq)
 
   call validate_grid_parameters(nnb, nb_min, nb_max, &
-       nt, t_min, t_max, nyq, yq_min, yq_max)
+       nt, t_min, t_max, nyq, yq_min, yq_max, validation_single_yq)
 
   allocate(nb(nnb), t(nt), yq(nyq))
   call make_log_grid(nb, nb_min, nb_max)
@@ -119,7 +123,8 @@ program make_compose_helmholtz
   !$omp shared(net, u_summary, nyq, nt, nnb, yq, t, nb, ye_tab, q1, q2, q7, q6, cs2, mue, &
   !$omp   yn, yp, yh2, yh3, yhe3, yhe4, ynuc, anuc, znuc, abar) &
   !$omp private(ye, temp_k, rho, xnse, nsefail, itr_out, err_out, xn_out, xp_out, xn_guess, xp_guess, &
-  !$omp   mexc, ytot, charge_sum, baryon_sum, max_baryon_err, max_charge_err, eps, pres, cs2_cgs, entr, eta_e)
+  !$omp   mexc, ytot, charge_sum, baryon_sum, max_baryon_err, max_charge_err, eps, pres, cs2_cgs, entr, eta_e, &
+  !$omp   ecoul_ave, eexci_ave, eps_helm)
   !$omp do collapse(2) schedule(dynamic,1)
   do iyq = 1, nyq
      do it = 1, nt
@@ -206,6 +211,11 @@ program make_compose_helmholtz
            call eos_all(rho, temp_k, ye, ytot, mexc, &
                 eps, pres, cs2_cgs, entr)
            call eos_get_misc(rho, temp_k, ye, ytot, mexc, eta_e)
+           eps_helm = eps - mexc*mev2erg/mu
+           call calc_coulomb_average(net, rho, ye, xnse, ecoul_ave)
+           call calc_excitation_average(net, temp_k, xnse, eexci_ave)
+
+           eps = eps + (ecoul_ave + eexci_ave)*mev2erg/mu
 
            ! PyCompOSE conventions used by the DD2.h5 table.
            ! Q1 = P/n_b [MeV]
@@ -231,7 +241,7 @@ program make_compose_helmholtz
            mue(it,iyq,inb) = memev + eta_e * t(it)
 
            write(u_summary,'(99es20.10e3)') nb(inb), t(it), ye, xn_out, xp_out, yn(it,iyq,inb), yp(it,iyq,inb), ynuc(it,iyq,inb)*anuc(it,iyq,inb), anuc(it,iyq,inb), &
-                znuc(it,iyq,inb), abar(it,iyq,inb)
+                znuc(it,iyq,inb), abar(it,iyq,inb), ytot, mexc, ecoul_ave, eexci_ave, eps_helm, eps
 
         enddo
 
@@ -243,13 +253,21 @@ program make_compose_helmholtz
   !$omp end do
   !$omp end parallel
 
+  call check_temperature_monotonicity(nb, t, yq, q7)
+
   ! Q5 is obtained from dF_b/dYq at fixed (nb,T), including the
   ! response of the NSE composition.  For charge-neutral matter this is
   ! the electron-lepton chemical potential mu_l.  Then
   !   mu_e = mu_l - mu_q,
   !   F_b  = -P/n_b + mu_b + Yq*mu_l,
   ! which determines Q4 and Q3.
-  call fill_chemical_potentials(t, yq, q1, q6, mue, q3, q4, q5)
+  if (validation_single_yq .and. nyq == 1) then
+     q3 = 0.d0
+     q4 = 0.d0
+     q5 = 0.d0
+  else
+     call fill_chemical_potentials(t, yq, q1, q6, mue, q3, q4, q5)
+  endif
 
   call write_compose_hdf5(trim(fn_out), nb, t, yq, mnmev, mpmev, &
        q1, q2, q3, q4, q5, q6, q7, cs2, &
@@ -265,12 +283,14 @@ contains
 
   subroutine read_parameter_file(fn, &
        fn_winv, fn_rauscher, fn_hs, fn_helm, fn_out, &
-       nnb, nb_min, nb_max, nt, t_min, t_max, nyq, yq_min, yq_max)
+       nnb, nb_min, nb_max, nt, t_min, t_max, nyq, yq_min, yq_max, &
+       validation_single_yq)
 
     character(*), intent(in) :: fn
     character(*), intent(out) :: fn_winv, fn_rauscher, fn_hs, fn_helm, fn_out
     integer, intent(out) :: nnb, nt, nyq
     real(8), intent(out) :: nb_min, nb_max, t_min, t_max, yq_min, yq_max
+    logical, intent(out) :: validation_single_yq
     real(8) :: lognb_min, lognb_max, logt_min, logt_max
 
     integer :: iu, ios
@@ -289,6 +309,7 @@ contains
     read(iu,*); read(iu,*) nnb, lognb_min, lognb_max
     read(iu,*); read(iu,*) nt,  logt_min,  logt_max
     read(iu,*); read(iu,*) nyq, yq_min, yq_max
+    read(iu,*); read(iu,*) validation_single_yq
 
     close(iu)
 
@@ -308,17 +329,53 @@ contains
 
 
   subroutine validate_grid_parameters(nnb, nb_min, nb_max, &
-       nt, t_min, t_max, nyq, yq_min, yq_max)
+       nt, t_min, t_max, nyq, yq_min, yq_max, validation_single_yq)
     integer, intent(in) :: nnb, nt, nyq
     real(8), intent(in) :: nb_min, nb_max, t_min, t_max, yq_min, yq_max
+    logical, intent(in) :: validation_single_yq
 
     if (nnb < 1 .or. nt < 1) error stop "nnb and nt must be >= 1"
-    if (nyq < 3) error stop "nyq must be >= 3 to construct Q5 with a 3-point derivative"
+    if (validation_single_yq) then
+       if (nyq /= 1 .and. nyq < 3) &
+            error stop "validation mode requires nyq = 1 or nyq >= 3"
+    else
+       if (nyq < 3) &
+            error stop "nyq must be >= 3 to construct Q5 with a 3-point derivative"
+    endif
     if (nb_min <= 0.d0 .or. nb_max < nb_min) error stop "invalid nb range"
     if (t_min <= 0.d0 .or. t_max < t_min) error stop "invalid temperature range"
     if (yq_min <= 0.d0 .or. yq_max >= 1.d0 .or. yq_max <= yq_min) &
          error stop "require 0 < yq_min < yq_max < 1"
   end subroutine validate_grid_parameters
+
+
+  subroutine check_temperature_monotonicity(nb, t, yq, q7)
+    real(8), intent(in) :: nb(:), t(:), yq(:), q7(:,:,:)
+
+    integer :: inb, it, iyq
+    integer :: nfail
+    real(8) :: deps
+
+    nfail = 0
+    do inb = 1, size(nb)
+       do iyq = 1, size(yq)
+          do it = 1, size(t)-1
+             ! Q7 differs from epsilon only by a positive scale and a
+             ! constant, so the sign of this difference is unchanged.
+             deps = (q7(it+1,iyq,inb) - q7(it,iyq,inb)) &
+                  * mnmev * mev2erg / mu
+             if (deps <= 0.d0) then
+                nfail = nfail + 1
+                write(*,'(a,3i7,5es18.9)') &
+                     "non-increasing epsilon at (inb,iyq,it), nb,Yq,T_i,T_i+1,dE = ", &
+                     inb, iyq, it, nb(inb), yq(iyq), t(it), t(it+1), deps
+             endif
+          enddo
+       enddo
+    enddo
+
+    if (nfail > 0) error stop "temperature monotonicity check failed"
+  end subroutine check_temperature_monotonicity
 
 
   subroutine make_log_grid(x, xmin, xmax)

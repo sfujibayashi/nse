@@ -12,7 +12,7 @@ module module_nse
 
   public :: output_nse_full
   public :: fcoulomb_HS
-  
+  public :: calc_coulomb_average, calc_excitation_average
   
   type :: stat_t
     real(8) :: yn
@@ -27,6 +27,7 @@ module module_nse
     real(8) :: abar
     real(8) :: mexc
     real(8) :: ecoul
+    real(8) :: eexc
  end type stat_t
 
  public :: stat_t
@@ -1573,10 +1574,10 @@ contains
   end subroutine statistic
 
 
-  subroutine statistic_compose(net, rho, x, stat)
+  subroutine statistic_compose(net, rho, temp, x, stat)
     use const, only:emev
     type(nse_network_t),intent(in) :: net
-    real(8),intent(in) :: rho, x(net%n_spec)
+    real(8),intent(in) :: rho, temp, x(net%n_spec)
     type(stat_t),intent(out) :: stat
 
     integer :: k
@@ -1642,8 +1643,9 @@ contains
     stat%y_n = y_heavy
 
     call calc_coulomb_average(net, rho, yesum, x, ecoul_ave)
-    
     stat%ecoul = ecoul_ave
+
+    call calc_excitation_average(net, temp, x, stat%eexc)
   end subroutine statistic_compose
 
 
@@ -1756,6 +1758,64 @@ contains
     ecoul_ave = sum(x(:)/net%a(:) * fcoul(:))
     
   end subroutine calc_coulomb_average
+
+  subroutine calc_excitation_average(net, temp, x, eexc_ave)
+
+    use const, only: mev2k
+
+    type(nse_network_t), intent(in) :: net
+    real(8), intent(in) :: temp
+    real(8), intent(in) :: x(net%n_spec)
+    real(8), intent(out) :: eexc_ave
+
+    real(8), parameter :: dlnT = 1d-4
+
+    real(8) :: temp_mev
+    real(8) :: t9
+    real(8) :: gminus(net%n_spec)
+    real(8) :: gplus(net%n_spec)
+    real(8) :: eexc
+    integer :: k
+
+    if (temp <= 0d0) then
+       write(*,*) "ERROR in calc_excitation_average: temp <= 0"
+       error stop
+    endif
+
+    eexc_ave = 0d0
+
+    ! Networks without temperature-dependent partition functions
+    ! have no nuclear excitation-energy contribution.
+    if (.not. net%use_winvne) return
+
+    temp_mev = temp/mev2k
+
+    ! Above the nuclear cutoff the NSE solver uses only free n/p.
+    if (temp_mev > temp_nuc_max_mev) return
+
+    t9 = temp/1d9
+
+    !
+    ! Differentiate with respect to ln T:
+    !
+    !   E_exc = T(MeV) d ln G / d ln T
+    !
+    ! Using calc_ptf_nse here guarantees that the same statistical-weight
+    ! policy as the NSE calculation is differentiated.
+    !
+    call calc_ptf_nse(net, t9*exp(-dlnT), gminus)
+    call calc_ptf_nse(net, t9*exp( dlnT), gplus)
+
+    do k = 1, net%n_spec
+
+       eexc = temp_mev * &
+            (log(gplus(k)) - log(gminus(k))) / (2d0*dlnT)
+
+       eexc_ave = eexc_ave + x(k)/net%a(k)*eexc
+
+    enddo
+
+  end subroutine calc_excitation_average
 
   subroutine resolve_network_nuclear_masses(net)
 
