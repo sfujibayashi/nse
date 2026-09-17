@@ -1,5 +1,5 @@
 program make_compose_helmholtz
-  use module_nse, only: nse_network_t, calc_nse, nse_init_winvne, calc_nse_nested_1d, calc_coulomb_average, calc_excitation_average
+  use module_nse, only: nse_network_t, calc_nse, nse_init_winvne, calc_nse_nested_1d, calc_coulomb_average, calc_excitation_average, calc_nuclear_entropy_correction, calc_coulomb_thermo_average
   use module_nuclear_data_winvne, only: init_winvne
   use module_ptf_rauscher, only: init_ptf_rauscher
   use module_nuclear_data_HS, only: init_nuclear_data_HS
@@ -50,7 +50,7 @@ program make_compose_helmholtz
   real(8) :: baryon_sum, charge_sum
   real(8) :: max_baryon_err, max_charge_err
 
-  real(8) :: ecoul_ave, eexci_ave
+  real(8) :: ecoul_ave, eexci_ave, entr_corr, pcoul
 
   integer :: u_summary
 
@@ -118,13 +118,13 @@ program make_compose_helmholtz
   write(*,'(a,i0)') "NSE species = ", net%n_spec
 
   open(newunit=u_summary, file= "summary.dat", status="replace", action="write")
-  write(u_summary, '("#",99a20)') "nb", "T", "Ye", "xn", "xp", "Yn", "Yp", "YN*AN", "AN", "ZN", "Abar", "Ytot", "mexc/b", "Ecoul/b", "Eexci/b", "eps_helm", "eps_total", "s/k"
+  write(u_summary, '("#",99a20)') "nb", "T", "Ye", "xn", "xp", "Yn", "Yp", "YN*AN", "AN", "ZN", "Abar", "Ytot", "mexc/b", "Ecoul/b", "Eexci/b", "eps_helm", "eps_total", "s/k", "ds/k(corr)", "Pcoul", "Ptotal"
   !$omp parallel default(none) &
   !$omp shared(net, u_summary, nyq, nt, nnb, yq, t, nb, ye_tab, q1, q2, q7, q6, cs2, mue, &
   !$omp   yn, yp, yh2, yh3, yhe3, yhe4, ynuc, anuc, znuc, abar) &
   !$omp private(ye, temp_k, rho, xnse, nsefail, itr_out, err_out, xn_out, xp_out, xn_guess, xp_guess, &
   !$omp   mexc, ytot, charge_sum, baryon_sum, max_baryon_err, max_charge_err, eps, pres, cs2_cgs, entr, eta_e, &
-  !$omp   ecoul_ave, eexci_ave, eps_helm)
+  !$omp   ecoul_ave, eexci_ave, eps_helm, entr_corr, pcoul)
   !$omp do collapse(2) schedule(dynamic,1)
   do iyq = 1, nyq
      do it = 1, nt
@@ -212,10 +212,13 @@ program make_compose_helmholtz
                 eps, pres, cs2_cgs, entr)
            call eos_get_misc(rho, temp_k, ye, ytot, mexc, eta_e)
            eps_helm = eps - mexc*mev2erg/mu
-           call calc_coulomb_average(net, rho, ye, xnse, ecoul_ave)
+           ! call calc_coulomb_average(net, rho, ye, xnse, ecoul_ave)
+           call calc_coulomb_thermo_average(net, rho, ye, xnse, ecoul_ave, pcoul)
            call calc_excitation_average(net, temp_k, xnse, eexci_ave)
-
+           call calc_nuclear_entropy_correction(net, temp_k, xnse, eexci_ave, entr_corr)
            eps = eps + (ecoul_ave + eexci_ave)*mev2erg/mu
+           entr= entr + entr_corr
+           pres= pres + pcoul
 
            ! PyCompOSE conventions used by the DD2.h5 table.
            ! Q1 = P/n_b [MeV]
@@ -241,7 +244,7 @@ program make_compose_helmholtz
            mue(it,iyq,inb) = memev + eta_e * t(it)
 
            write(u_summary,'(" ",99es20.10e3)') nb(inb), t(it), ye, xn_out, xp_out, yn(it,iyq,inb), yp(it,iyq,inb), ynuc(it,iyq,inb)*anuc(it,iyq,inb), anuc(it,iyq,inb), &
-                znuc(it,iyq,inb), abar(it,iyq,inb), ytot, mexc, ecoul_ave, eexci_ave, eps_helm, eps, entr
+                znuc(it,iyq,inb), abar(it,iyq,inb), ytot, mexc, ecoul_ave, eexci_ave, eps_helm, eps, entr, entr_corr, pcoul, pres
 
         enddo
 

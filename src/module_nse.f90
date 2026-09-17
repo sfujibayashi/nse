@@ -12,7 +12,7 @@ module module_nse
 
   public :: output_nse_full
   public :: fcoulomb_HS
-  public :: calc_coulomb_average, calc_excitation_average
+  public :: calc_coulomb_average, calc_excitation_average, calc_nuclear_entropy_correction, calc_coulomb_thermo_average
   
   type :: stat_t
     real(8) :: yn
@@ -405,6 +405,62 @@ contains
     enddo
     
   end subroutine calc_coulomb_HS
+
+  subroutine fcoulomb_HS_thermo(rho, ye, z, a, n0_fm, &
+       fcoul, dfcoul_dlnrho)
+
+    use const, only : mu, pi, fine, hbar, clight, mev2erg
+
+    real(8), intent(in)  :: rho, ye, z, a, n0_fm
+    real(8), intent(out) :: fcoul
+    real(8), intent(out) :: dfcoul_dlnrho
+
+    real(8) :: ne, n0, r, x
+    real(8) :: prefactor
+
+    ! fm^-3 -> cm^-3
+    n0 = n0_fm * 1d39
+
+    ! no Coulomb correction for free nucleons or neutral species
+    if (a <= 1d0 .or. z <= 0d0) then
+       fcoul = 0d0
+       dfcoul_dlnrho = 0d0
+       return
+    endif
+
+    ne = ye*rho/mu
+
+    r = (3d0*a/(4d0*pi*n0))**(1d0/3d0)
+
+    x = (ne/n0 * a/z)**(1d0/3d0)
+
+    !
+    ! F_Coul [MeV / nucleus]
+    !
+    prefactor = -3d0/5d0 * z**2 * fine*hbar*clight/r / mev2erg
+
+    fcoul = prefactor * (1.5d0*x - 0.5d0*x**3)
+
+    !
+    ! At fixed Ye, A, Z:
+    !
+    !   x propto rho^(1/3)
+    !
+    ! so
+    !
+    !   d x / d ln(rho) = x/3
+    !
+    ! and therefore
+    !
+    !   d F_Coul / d ln(rho)
+    !     = prefactor * 0.5*x*(1 - x^2)
+    !
+    ! [MeV / nucleus]
+    !
+    dfcoul_dlnrho = prefactor * 0.5d0*x*(1d0 - x**2)
+
+  end subroutine fcoulomb_HS_thermo
+
   
   function fcoulomb_HS(rho, ye, z, a, n0_fm) result(fcoul)
 
@@ -412,25 +468,11 @@ contains
     
     real(8),intent(in)  :: rho, ye, z, a, n0_fm
     real(8) :: fcoul
-    real(8) :: ne, n0, r, x
-
-    ! fm^-3 -> cm^-3
-    n0 = n0_fm * 1d39
-
-    ne = ye*rho/mu
-
-    ! no Coulomb correction for free proton
-    if (a <= 1d0 .or. z <= 0d0)then
-       fcoul = 0d0
-       return
-    endif
+    real(8) :: dfcoul_dlnrho
     
-    r = (3d0*a/(4d0*pi*n0))**(1d0/3d0)
-    
-    x = (ne/n0 * a/z)**(1d0/3d0)
-    
-    fcoul = -3d0/5d0 * z**2 * fine*hbar*clight/r &
-         * (1.5d0*x - 0.5d0*x**3) / mev2erg
+    call fcoulomb_HS_thermo( &
+         rho, ye, z, a, n0_fm, &
+         fcoul, dfcoul_dlnrho)
     
   end function fcoulomb_HS
   
@@ -1759,6 +1801,47 @@ contains
     
   end subroutine calc_coulomb_average
 
+  subroutine calc_coulomb_thermo_average( &
+       net, rho, ye, x, ecoul_ave, pcoul)
+
+    use const, only : mu, mev2erg
+
+    type(nse_network_t), intent(in) :: net
+    real(8), intent(in)  :: rho, ye
+    real(8), intent(in)  :: x(net%n_spec)
+    real(8), intent(out) :: ecoul_ave
+    real(8), intent(out) :: pcoul
+
+    integer :: k
+    real(8) :: fcoul, dfcoul_dlnrho
+    real(8) :: yi
+    real(8) :: df_ave
+
+    ecoul_ave = 0d0
+    df_ave = 0d0
+
+    do k = 1, net%n_spec
+
+       yi = x(k)/net%a(k)
+
+       call fcoulomb_HS_thermo( &
+            rho, ye, net%z(k), net%a(k), net%n0_fm, &
+            fcoul, dfcoul_dlnrho)
+
+       ecoul_ave = ecoul_ave + yi*fcoul
+       df_ave    = df_ave    + yi*dfcoul_dlnrho
+
+    enddo
+
+    !
+    ! rho/mu = baryon number density [cm^-3]
+    ! df_ave is MeV/baryon
+    !
+    pcoul = rho/mu * df_ave * mev2erg
+
+  end subroutine calc_coulomb_thermo_average
+
+
   subroutine calc_excitation_average(net, temp, x, eexc_ave)
 
     use const, only: mev2k
@@ -1816,6 +1899,116 @@ contains
     enddo
 
   end subroutine calc_excitation_average
+  
+  subroutine calc_nuclear_entropy_correction(net, temp, x, eexc_ave, entr_corr)
+
+    use const, only: mev2k, mumev
+
+    type(nse_network_t), intent(in) :: net
+    real(8), intent(in) :: temp
+    real(8), intent(in) :: x(net%n_spec)
+    real(8), intent(in) :: eexc_ave
+    real(8), intent(out) :: entr_corr
+
+    real(8) :: g(net%n_spec)
+    real(8) :: yi, ytot, abar
+    real(8) :: temp_mev
+    integer :: k, kn, kp
+    real(8) :: yn_free, yp_free
+
+    if (temp <= 0.d0) then
+       write(*,*) "ERROR in calc_nuclear_entropy_correction: temp <= 0"
+       error stop
+    endif
+
+    temp_mev = temp/mev2k
+
+    if (temp_mev > temp_nuc_max_mev) then
+
+       !
+       ! NSE model above temp_nuc_max_mev consists only of free n and p.
+       ! Do not evaluate nuclear partition functions here.
+       !
+       kn = find_nucleus(net, 1, 0)
+       kp = find_nucleus(net, 1, 1)
+
+       if (kn <= 0 .or. kp <= 0) then
+          write(*,*) "ERROR: free neutron/proton not found"
+          error stop
+       endif
+
+       yn_free = x(kn)
+       yp_free = x(kp)
+
+       entr_corr = 0.d0
+
+       if (yn_free > 0.d0) then
+          entr_corr = entr_corr + yn_free * ( &
+               -log(yn_free) &
+               + 1.5d0*log(net%mass(kn)/mumev) &
+               + log(2.d0) )
+       endif
+
+       if (yp_free > 0.d0) then
+          entr_corr = entr_corr + yp_free * ( &
+               -log(yp_free) &
+               + 1.5d0*log(net%mass(kp)/mumev) &
+               + log(2.d0) )
+       endif
+
+       !
+       ! Here Ytot = 1 and Abar = 1, so the Helmholtz single-ion
+       ! reference term
+       !
+       !   Ytot * [-log(Ytot) + 3/2 log(Abar)]
+       !
+       ! is exactly zero.
+       !
+       return
+
+    endif
+
+
+    ytot = sum(x(:)/net%a(:))
+
+    if (ytot <= 0.d0) then
+       write(*,*) "ERROR: non-positive Ytot"
+       error stop
+    endif
+
+    abar = 1.d0/ytot
+
+    entr_corr = 0.d0
+
+    !
+    ! Statistical weights used by the NSE calculation.
+    !
+    call calc_ptf_nse(net, temp/1.d9, g)
+
+    do k = 1, net%n_spec
+
+       yi = x(k)/net%a(k)
+
+       if (yi <= 0.d0) cycle
+
+       entr_corr = entr_corr + yi * ( &
+            - log(yi) &
+            + 1.5d0*log(net%mass(k)/mumev) &
+            + log(g(k)) )
+
+    enddo
+
+    ! Internal excitation contribution:
+    ! S_exc/k_B = (E_exc/b) / T_MeV
+    entr_corr = entr_corr + eexc_ave/temp_mev
+
+    ! Remove the single-species ion entropy already included
+    ! in the Helmholtz EOS.
+    entr_corr = entr_corr - ytot * ( &
+         - log(ytot) + 1.5d0*log(abar) )
+
+  end subroutine calc_nuclear_entropy_correction
+
 
   subroutine resolve_network_nuclear_masses(net)
 
