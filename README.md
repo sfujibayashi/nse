@@ -470,11 +470,14 @@ helmholtz_nse.h5
 
 # nyq, Yq_min, Yq_max
 60 0.01 0.60
+
+# validation_single_yq
+F
 ```
 
 The actual ranges and resolutions should be chosen for the intended EOS application.
 
-The \(Y_q\) grid must contain at least three points because the current calculation of the chemical potentials uses a three-point derivative.
+Normally the \(Y_q\) grid must contain at least three points because the current calculation of the chemical potentials uses a three-point derivative.  For single-\(Y_q\) validation runs, set `validation_single_yq` to `T` and `nyq` to 1; `Q3`, `Q4`, and `Q5` are then written as zero.  Two-point \(Y_q\) grids are not supported.
 
 Run with
 
