@@ -839,7 +839,6 @@ contains
     call nse_solve_u_for_v(net, logge, v0, u0, tol_inner, itrlim, &
          u, xnse, fmass, logye_calc, dlogye_dv, &
          iinner, inner_fail)
-    write(*,*) "inner iterations =", iinner
     if (inner_fail) then
        nsefail = .true.
        return
@@ -888,7 +887,7 @@ contains
           call nse_solve_u_for_v(net, logge, vhi, u_seed, tol_inner, itrlim, &
                u, xnse, fmass, logye_calc, dlogye_dv, &
                iinner, inner_fail)
-          write(*,*) "inner iterations =", iinner
+
           if (inner_fail) then
              nsefail = .true.
              return
@@ -926,7 +925,7 @@ contains
           call nse_solve_u_for_v(net, logge, vlo, u_seed, tol_inner, itrlim, &
                u, xnse, fmass, logye_calc, dlogye_dv, &
                iinner, inner_fail)
-          write(*,*) "inner iterations =", iinner
+
           if (inner_fail) then
              nsefail = .true.
              return
@@ -964,7 +963,7 @@ contains
        call nse_solve_u_for_v(net, logge, v, u_seed, tol_inner, itrlim, &
             u, xnse, fmass, logye_calc, dlogye_dv, &
             iinner, inner_fail)
-       write(*,*) "inner iterations =", iinner
+
        if (inner_fail) then
           nsefail = .true.
           return
@@ -1869,7 +1868,7 @@ contains
 
     call nse_eval_mass_uv(net, logge, u, v, fu, dfdu)
 
-    if (abs(fu) < tol) then
+    if (abs(fu) < tol*dfdu) then
 
        call nse_eval_composition_uv(net, logge, u, v, &
             x, fmass, logye_calc, dlogye_dv)
@@ -1950,7 +1949,7 @@ contains
 
        itr_out = itr
 
-       if (abs(fu) < tol) exit
+       if (abs(fu) < tol*dfdu) exit
 
 
        if (fu < 0d0) then
@@ -1981,7 +1980,7 @@ contains
 
     call nse_eval_mass_uv(net, logge, u, v, fu, dfdu)
 
-    if (abs(fu) >= tol) then
+    if (abs(fu) >= tol*dfdu) then
        fail = .true.
        return
     endif
